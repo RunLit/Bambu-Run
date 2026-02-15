@@ -1,0 +1,303 @@
+{% extends bambu_run_base_template %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h1>{% if form.instance.pk %}Edit{% else %}Add{% endif %} Filament Spool</h1>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+
+                <h5>Identification</h5>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Spool Serial Number (SN)</label>
+                        {{ form.tray_uuid }}
+                        <small class="form-text text-muted">Auto-filled from MQTT tray_uuid</small>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">RFID Chip ID (tag_uid)</label>
+                        {{ form.tag_uid }}
+                        <small class="form-text text-muted">Auto-filled from MQTT RFID</small>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Custom Tag ID (Optional)</label>
+                        {{ form.tag_id }}
+                        <small class="form-text text-muted">User-defined barcode/label</small>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Created By</label>
+                        {{ form.created_by }}
+                        <small class="form-text text-muted">How this filament was added</small>
+                    </div>
+                </div>
+
+                <hr>
+                <h5>Specifications</h5>
+
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Type *</label>
+                        {{ form.type }}
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Sub Type</label>
+                        {{ form.sub_type }}
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Brand *</label>
+                        {{ form.brand }}
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Color *</label>
+                        {{ form.color }}
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Color Picker</label>
+                        {{ form.color_hex }}
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">{{ form.color_hex_text.label }}</label>
+                        {{ form.color_hex_text }}
+                        <small class="form-text text-muted">e.g. #0A2CA5</small>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Diameter (mm)</label>
+                        {{ form.diameter }}
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Initial Weight (g)</label>
+                        {{ form.initial_weight_grams }}
+                    </div>
+                </div>
+
+                <hr>
+                <h5>Current Status</h5>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Remaining %</label>
+                        {{ form.remaining_percent }}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Remaining Weight (g)</label>
+                        {{ form.remaining_weight_grams }}
+                        <small class="form-text text-muted">Auto-calculated</small>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="form-check">
+                            {{ form.is_loaded_in_ams }}
+                            <label class="form-check-label">Loaded in AMS</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">AMS Tray ID (0-3)</label>
+                        {{ form.current_tray_id }}
+                    </div>
+                </div>
+
+                <hr>
+                <h5>Purchase Info (Optional)</h5>
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Purchase Date</label>
+                        {{ form.purchase_date }}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Price</label>
+                        {{ form.purchase_price }}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Supplier</label>
+                        {{ form.supplier }}
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Notes</label>
+                    {{ form.notes }}
+                </div>
+
+                {% if form.errors %}
+                <div class="alert alert-danger">
+                    <strong>Please correct the following errors:</strong>
+                    {{ form.errors }}
+                </div>
+                {% endif %}
+
+                <div class="d-flex justify-content-between">
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">Save</button>
+                        <a href="{% url 'bambu_run:filament_list' %}" class="btn btn-secondary">Cancel</a>
+                    </div>
+                    {% if form.instance.pk %}
+                    <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal" id="deleteBtn">
+                        <i class="bi bi-trash-fill me-1"></i>Delete
+                    </button>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% if form.instance.pk %}
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>Delete Filament Spool
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'bambu_run:filament_delete' form.instance.pk %}" id="deleteForm">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="alert alert-danger mb-3" role="alert">
+                        <strong>Warning: This action cannot be undone!</strong>
+                    </div>
+                    <p>You are about to permanently delete:</p>
+                    <div class="card bg-light mb-3">
+                        <div class="card-body">
+                            <strong>{{ form.instance }}</strong>
+                        </div>
+                    </div>
+                    <p>This will remove:</p>
+                    <ul>
+                        <li>This filament spool record</li>
+                        <li>All associated usage history</li>
+                        <li>All filament snapshots</li>
+                    </ul>
+                    <hr>
+                    <div class="mb-3">
+                        <label for="deleteConfirmText" class="form-label">
+                            To confirm deletion, type <strong class="text-danger">DELETE</strong> in the box below:
+                        </label>
+                        <input type="text" id="deleteConfirmText" class="form-control form-control-lg" placeholder="Type DELETE to confirm" autocomplete="off">
+                        <div class="form-text">Must be in capital letters</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" id="confirmDeleteBtn" class="btn btn-danger" disabled>
+                        <i class="bi bi-trash-fill me-1"></i>Confirm Delete
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Sync color picker and text input
+    const colorPicker = document.getElementById('id_color_hex_picker');
+    const colorText = document.getElementById('id_color_hex_text');
+
+    if (colorPicker && colorText) {
+        colorPicker.addEventListener('input', function() {
+            colorText.value = this.value.toUpperCase();
+        });
+
+        colorText.addEventListener('input', function() {
+            const value = this.value.trim();
+            if (/^#[0-9A-Fa-f]{6}$/.test(value)) {
+                colorPicker.value = value;
+                this.classList.remove('is-invalid');
+            } else if (value.length === 7) {
+                this.classList.add('is-invalid');
+            }
+        });
+
+        if (colorText.value && /^#[0-9A-Fa-f]{6}$/.test(colorText.value)) {
+            colorPicker.value = colorText.value;
+        } else if (colorPicker.value && !colorText.value) {
+            colorText.value = colorPicker.value.toUpperCase();
+        }
+    }
+
+    // Delete confirmation logic
+    const deleteConfirmText = document.getElementById('deleteConfirmText');
+    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+    const deleteForm = document.getElementById('deleteForm');
+    const deleteModal = document.getElementById('deleteModal');
+
+    if (deleteConfirmText && confirmDeleteBtn) {
+        deleteConfirmText.addEventListener('input', function() {
+            const value = this.value.trim();
+            if (value === 'DELETE') {
+                confirmDeleteBtn.disabled = false;
+                this.classList.remove('is-invalid');
+                this.classList.add('is-valid');
+            } else {
+                confirmDeleteBtn.disabled = true;
+                this.classList.remove('is-valid');
+                if (value.length > 0) {
+                    this.classList.add('is-invalid');
+                } else {
+                    this.classList.remove('is-invalid');
+                }
+            }
+        });
+
+        if (deleteForm) {
+            deleteForm.addEventListener('submit', function(e) {
+                if (confirmDeleteBtn.disabled) {
+                    e.preventDefault();
+                    alert('Please type DELETE to confirm deletion');
+                    return false;
+                }
+                return true;
+            });
+        }
+
+        if (deleteModal) {
+            deleteModal.addEventListener('hidden.bs.modal', function() {
+                deleteConfirmText.value = '';
+                confirmDeleteBtn.disabled = true;
+                deleteConfirmText.classList.remove('is-valid', 'is-invalid');
+            });
+
+            deleteModal.addEventListener('shown.bs.modal', function() {
+                deleteConfirmText.focus();
+            });
+        }
+    }
+
+    // Backup modal opener
+    const deleteBtn = document.getElementById('deleteBtn');
+    if (deleteBtn && deleteModal) {
+        deleteBtn.addEventListener('click', function() {
+            if (!deleteModal.classList.contains('show')) {
+                if (typeof bootstrap !== 'undefined') {
+                    const modalInstance = bootstrap.Modal.getOrCreateInstance(deleteModal);
+                    modalInstance.show();
+                } else if (typeof coreui !== 'undefined' && coreui.Modal) {
+                    const modalInstance = coreui.Modal.getOrCreateInstance(deleteModal);
+                    modalInstance.show();
+                }
+            }
+        });
+    }
+</script>
+{% endblock %}

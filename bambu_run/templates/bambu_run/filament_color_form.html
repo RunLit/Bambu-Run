@@ -1,0 +1,80 @@
+{% extends bambu_run_base_template %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h1>{% if form.instance.pk %}Edit{% else %}Add{% endif %} Filament Color</h1>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+
+                <h5>Color Information</h5>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Color Name *</label>
+                        {{ form.color_name }}
+                        <small class="form-text text-muted">e.g., Black, Orange, Signal White</small>
+                        {% if form.color_name.errors %}
+                            <div class="text-danger">{{ form.color_name.errors }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Color Hex Code *</label>
+                        {{ form.color_hex_input }}
+                        <small class="form-text text-muted">Format: #RRGGBB (without FF padding)</small>
+                        {% if form.color_hex_input.errors %}
+                            <div class="text-danger">{{ form.color_hex_input.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <hr>
+                <h5>Filament Type (for matching)</h5>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Filament Type</label>
+                        {{ form.filament_type_fk }}
+                        <small class="form-text text-muted">Select from the filament type registry</small>
+                        {% if form.filament_type_fk.errors %}
+                            <div class="text-danger">{{ form.filament_type_fk.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Hidden fields for backward compatibility -->
+                {{ form.color_code }}
+                {{ form.filament_type }}
+                {{ form.filament_sub_type }}
+                {{ form.brand }}
+
+                <hr>
+                <div class="d-flex justify-content-between">
+                    <a href="{% url 'bambu_run:filament_color_list' %}" class="btn btn-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-primary">
+                        {% if form.instance.pk %}Update Color{% else %}Add Color{% endif %}
+                    </button>
+                </div>
+
+                {% if form.errors %}
+                    <div class="alert alert-danger mt-3">
+                        <strong>Please correct the following errors:</strong>
+                        <ul>
+                            {% for field, errors in form.errors.items %}
+                                {% for error in errors %}
+                                    <li>{{ field }}: {{ error }}</li>
+                                {% endfor %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

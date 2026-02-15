@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en" data-coreui-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Bambu Run{% endblock %}</title>
+    <!-- CoreUI 5.3 CSS CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/@coreui/coreui@5.3.0/dist/css/coreui.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/css/all.min.css" rel="stylesheet">
+    {% block extra_css %}{% endblock %}
+    <style>
+        .sidebar-brand { padding: 1rem; font-size: 1.25rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <div class="sidebar sidebar-dark sidebar-fixed" id="sidebar">
+        <div class="sidebar-brand d-none d-md-flex">
+            Bambu Run
+        </div>
+        <ul class="sidebar-nav" data-coreui="navigation">
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'bambu_run:printer_dashboard' %}">
+                    <svg class="nav-icon"><use xlink:href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/sprites/free.svg#cil-print"></use></svg>
+                    3D Printer
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'bambu_run:filament_list' %}">
+                    <svg class="nav-icon"><use xlink:href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/sprites/free.svg#cil-layers"></use></svg>
+                    Filament Inventory
+                </a>
+            </li>
+        </ul>
+    </div>
+
+    <div class="wrapper d-flex flex-column min-vh-100">
+        <header class="header header-sticky p-0 mb-4">
+            <div class="container-fluid px-4">
+                <button class="header-toggler" type="button" onclick="document.getElementById('sidebar').classList.toggle('show')">
+                    <svg class="icon icon-lg"><use xlink:href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/sprites/free.svg#cil-menu"></use></svg>
+                </button>
+                <ul class="header-nav ms-auto">
+                    <li class="nav-item">
+                        <button class="nav-link" id="themeToggle" type="button">
+                            <svg class="icon icon-lg"><use xlink:href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/sprites/free.svg#cil-moon"></use></svg>
+                        </button>
+                    </li>
+                    {% if user.is_authenticated %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'logout' %}">Logout</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </header>
+
+        <div class="body flex-grow-1">
+            <div class="container-lg px-4">
+                {% block content %}{% endblock %}
+            </div>
+        </div>
+
+        <footer class="footer px-4">
+            <div>Bambu Run</div>
+            <div class="ms-auto">Powered by <a href="https://github.com/runnanli/Bambu-Run">Bambu Run</a></div>
+        </footer>
+    </div>
+
+    <!-- CoreUI 5.3 JS CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@coreui/coreui@5.3.0/dist/js/coreui.bundle.min.js"></script>
+    <script>
+        // Theme toggle
+        const themeToggle = document.getElementById('themeToggle');
+        const savedTheme = localStorage.getItem('bambu-run-theme') || 'dark';
+        document.documentElement.setAttribute('data-coreui-theme', savedTheme);
+
+        if (themeToggle) {
+            themeToggle.addEventListener('click', function() {
+                const current = document.documentElement.getAttribute('data-coreui-theme');
+                const next = current === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-coreui-theme', next);
+                localStorage.setItem('bambu-run-theme', next);
+            });
+        }
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

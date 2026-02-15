@@ -1,0 +1,390 @@
+{% extends bambu_run_base_template %}
+{% load static %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'bambu_run/css/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h1>3D Printer Dashboard</h1>
+            <p class="text-body-secondary">
+                Real-time monitoring for {{ device_name }}
+            </p>
+        </div>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% else %}
+
+    <!-- Summary Cards Row -->
+    <div class="row g-3 mb-4">
+        <!-- Nozzle Temperature Card -->
+        <div class="col-12 col-md-6 col-lg-3">
+            <div class="card infra-card-warning">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="stat-label">Nozzle Temp</div>
+                            <div class="stat-value">{{ stats.nozzle_temp|floatformat:1 }}&deg;C</div>
+                        </div>
+                        <i class="bi bi-thermometer-high" style="font-size: 2rem; opacity: 0.3;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bed Temperature Card -->
+        <div class="col-12 col-md-6 col-lg-3">
+            <div class="card infra-card-danger">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="stat-label">Bed Temp</div>
+                            <div class="stat-value">{{ stats.bed_temp|floatformat:1 }}&deg;C</div>
+                        </div>
+                        <i class="bi bi-thermometer-half" style="font-size: 2rem; opacity: 0.3;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Print Progress Card -->
+        <div class="col-12 col-md-6 col-lg-3">
+            <div class="card infra-card-info">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="stat-label">Print Progress</div>
+                            <div class="stat-value">{{ stats.print_percent }}%</div>
+                        </div>
+                        <i class="bi bi-pie-chart-fill" style="font-size: 2rem; opacity: 0.3;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chamber Light Card -->
+        <div class="col-12 col-md-6 col-lg-3">
+            <div class="card {% if stats.chamber_light == 'on' %}infra-card-success{% else %}infra-card-secondary{% endif %}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="stat-label">Chamber Light</div>
+                            <div class="stat-value">{{ stats.chamber_light|upper }}</div>
+                        </div>
+                        <i class="bi bi-lightbulb-fill" style="font-size: 2rem; opacity: 0.3;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Current Print Job Info -->
+    {% if stats.subtask_name and stats.subtask_name != 'No active print' %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Current Print Job</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>Job Name:</strong> {{ stats.subtask_name }}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>State:</strong> {{ stats.gcode_state }}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Progress:</strong> {{ stats.print_percent }}%
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- AMS Status Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>AMS Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <strong>Temperature:</strong>
+                            {% if stats.ams_temp %}
+                                {{ stats.ams_temp|floatformat:1 }}&deg;C
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4">
+                            <strong>Humidity:</strong>
+                            {% if stats.ams_humidity %}
+                                {{ stats.ams_humidity }}%
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filaments Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Filaments</h5>
+                </div>
+                <div class="card-body">
+                    {% if stats.filaments %}
+                    <div class="row g-3">
+                        {% for filament in stats.filaments %}
+                        <div class="col-12 col-md-6 col-lg-3">
+                            <div class="card filament-card" data-filament-color="{{ filament.color|slice:':6' }}">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h6 class="mb-0">Tray {{ filament.tray_id }}</h6>
+                                        {% if filament.filament_pk %}
+                                        <a href="{% url 'bambu_run:filament_detail' filament.filament_pk %}" class="text-decoration-none" title="View in inventory">
+                                            <svg class="icon icon-sm text-body-secondary"><use xlink:href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/sprites/free.svg#cil-external-link"></use></svg>
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                    <p class="mb-1 small"><strong>{{ filament.type }}</strong> - {{ filament.brand }}</p>
+                                    {% if filament.color_name %}<p class="mb-1 small text-body-secondary">{{ filament.color_name }}</p>{% endif %}
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="small">Remaining</span>
+                                        <span class="badge filament-badge">{{ filament.remain_percent }}%</span>
+                                    </div>
+                                    <div class="progress" style="height: 10px; background-color: rgba(0,0,0,0.1);">
+                                        <div class="progress-bar filament-progress" role="progressbar" style="width: {{ filament.remain_percent }}%;" aria-valuenow="{{ filament.remain_percent }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+
+                        {% if stats.external_spool.type %}
+                        <div class="col-12 col-md-6 col-lg-3">
+                            <div class="card filament-card" data-filament-color="{{ stats.external_spool.color|slice:':6' }}">
+                                <div class="card-body">
+                                    <h6 class="mb-2">External Spool</h6>
+                                    <p class="mb-1 small"><strong>{{ stats.external_spool.type }}</strong> - External</p>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="small">Remaining</span>
+                                        <span class="badge filament-badge">{{ stats.external_spool.remain }}%</span>
+                                    </div>
+                                    <div class="progress" style="height: 10px; background-color: rgba(0,0,0,0.1);">
+                                        <div class="progress-bar filament-progress" role="progressbar" style="width: {{ stats.external_spool.remain }}%;" aria-valuenow="{{ stats.external_spool.remain }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <p class="text-body-secondary">No filament data available</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Date/Time Filter Controls -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <strong>Chart Filters</strong>
+                        <span class="text-muted" id="printerDateRange">(Last 24 Hours)</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <!-- Date Range -->
+                        <div class="d-flex align-items-center gap-1">
+                            <label class="form-label mb-0 small text-body-secondary">From:</label>
+                            <input type="date" class="form-control form-control-sm" id="printerStartDate" style="width: auto;">
+                        </div>
+                        <div class="d-flex align-items-center gap-1">
+                            <label class="form-label mb-0 small text-body-secondary">To:</label>
+                            <input type="date" class="form-control form-control-sm" id="printerEndDate" style="width: auto;">
+                        </div>
+                        <!-- Full Day Checkbox -->
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="printerFullDayCheckbox" checked>
+                            <label class="form-check-label small" for="printerFullDayCheckbox">Full Day</label>
+                        </div>
+                        <!-- Time Range -->
+                        <div class="d-flex align-items-center gap-1" id="printerTimeRangeControls">
+                            <label class="form-label mb-0 small text-body-secondary">Time:</label>
+                            <select class="form-select form-select-sm" id="printerStartTime" style="width: auto;" disabled></select>
+                            <span class="text-body-secondary">-</span>
+                            <select class="form-select form-select-sm" id="printerEndTime" style="width: auto;" disabled></select>
+                        </div>
+                        <!-- Buttons -->
+                        <button type="button" class="btn btn-primary btn-sm" id="refreshPrinterCharts">
+                            <svg class="icon"><use xlink:href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/sprites/free.svg#cil-reload"></use></svg>
+                            Refresh
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="resetPrinterCharts">
+                            <svg class="icon"><use xlink:href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/sprites/free.svg#cil-action-undo"></use></svg>
+                            Reset
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filament Timeline Chart - Full Width -->
+    <div class="row g-3 mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">Filament Remaining Timeline</div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="filamentTimelineChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="row g-3 mb-4">
+        <!-- Nozzle Temperature Chart -->
+        <div class="col-12 col-lg-6">
+            <div class="card">
+                <div class="card-header">Nozzle Temperature</div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="nozzleTempChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bed Temperature Chart -->
+        <div class="col-12 col-lg-6">
+            <div class="card">
+                <div class="card-header">Bed Temperature</div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="bedTempChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <!-- Print Progress Chart -->
+        <div class="col-12 col-lg-6">
+            <div class="card">
+                <div class="card-header">Print Progress</div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="printProgressChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fan Speeds Chart -->
+        <div class="col-12 col-lg-6">
+            <div class="card">
+                <div class="card-header">Fan Speeds</div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="fanSpeedsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <!-- WiFi Signal Chart -->
+        <div class="col-12 col-lg-6">
+            <div class="card">
+                <div class="card-header">WiFi Signal Strength</div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="wifiSignalChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AMS Conditions Chart -->
+        <div class="col-12 col-lg-6">
+            <div class="card">
+                <div class="card-header">AMS Conditions</div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="amsConditionsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <!-- Layer Progress Chart -->
+        <div class="col-12 col-lg-6">
+            <div class="card">
+                <div class="card-header">Layer Progress</div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="layerProgressChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <p class="text-body-secondary text-end">
+                Last updated: {{ stats.timestamp }}
+            </p>
+        </div>
+    </div>
+
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1"></script>
+<script src="{% static 'bambu_run/js/printer_charts.js' %}"></script>
+<script src="{% static 'bambu_run/js/printer_charts_control.js' %}"></script>
+<div id="printerApiUrl" data-url="{% url 'bambu_run:printer_api' %}" style="display: none;"></div>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const printerData = {{ printer_data_json|safe }};
+        const apiUrl = '{% url "bambu_run:printer_api" %}';
+        initPrinterCharts(printerData, apiUrl);
+
+        // Add project markers if they exist
+        if (printerData.project_markers && printerData.project_markers.length > 0) {
+            setTimeout(function() {
+                addProjectMarkersToCharts(printerData.project_markers, printerData.timestamps);
+            }, 500);
+        }
+    });
+</script>
+{% endblock %}

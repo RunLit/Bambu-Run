@@ -1,0 +1,92 @@
+{% extends bambu_run_base_template %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h1>{% if form.instance.pk %}Edit{% else %}Add{% endif %} Filament Type</h1>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Type *</label>
+                        <div class="input-group">
+                            {{ form.type }}
+                            <button class="btn btn-outline-secondary dropdown-toggle" type="button"
+                                    data-coreui-toggle="dropdown" aria-expanded="false"></button>
+                            <ul class="dropdown-menu dropdown-menu-end" id="type-dropdown"></ul>
+                        </div>
+                        <small class="form-text text-muted">Base material: PLA, PETG, ABS, etc.</small>
+                        {% if form.type.errors %}
+                            <div class="text-danger">{{ form.type.errors }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Sub Type</label>
+                        <div class="input-group">
+                            {{ form.sub_type }}
+                            <button class="btn btn-outline-secondary dropdown-toggle" type="button"
+                                    data-coreui-toggle="dropdown" aria-expanded="false"></button>
+                            <ul class="dropdown-menu dropdown-menu-end" id="sub-type-dropdown"></ul>
+                        </div>
+                        <small class="form-text text-muted">Optional: PLA Basic, PLA Matte, etc.</small>
+                        {% if form.sub_type.errors %}
+                            <div class="text-danger">{{ form.sub_type.errors }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Brand *</label>
+                        <div class="input-group">
+                            {{ form.brand }}
+                            <button class="btn btn-outline-secondary dropdown-toggle" type="button"
+                                    data-coreui-toggle="dropdown" aria-expanded="false"></button>
+                            <ul class="dropdown-menu dropdown-menu-end" id="brand-dropdown"></ul>
+                        </div>
+                        {% if form.brand.errors %}
+                            <div class="text-danger">{{ form.brand.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <hr>
+                <div class="d-flex justify-content-between">
+                    <a href="{% url 'bambu_run:filament_type_list' %}" class="btn btn-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-primary">
+                        {% if form.instance.pk %}Update Type{% else %}Add Type{% endif %}
+                    </button>
+                </div>
+
+                {% if form.errors %}
+                    <div class="alert alert-danger mt-3">
+                        <strong>Please correct the following errors:</strong>
+                        <ul>
+                            {% for field, errors in form.errors.items %}
+                                {% for error in errors %}
+                                    <li>{{ field }}: {{ error }}</li>
+                                {% endfor %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ existing_types|json_script:"existing-types" }}
+{{ existing_sub_types|json_script:"existing-sub-types" }}
+{{ existing_brands|json_script:"existing-brands" }}
+{{ preset_types|json_script:"preset-types" }}
+{{ preset_sub_types|json_script:"preset-sub-types" }}
+{{ preset_brands|json_script:"preset-brands" }}
+<script src="{% static 'bambu_run/js/filament_type_form.js' %}"></script>
+{% endblock %}

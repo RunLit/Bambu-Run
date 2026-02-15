@@ -1,0 +1,109 @@
+{% extends bambu_run_base_template %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1>Filament Color Database</h1>
+            <p class="text-muted">Manage filament colors for auto-matching</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{% url 'bambu_run:filament_color_create' %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Add New Color
+            </a>
+            <a href="{% url 'bambu_run:filament_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Inventory
+            </a>
+        </div>
+    </div>
+
+    <!-- Summary Card -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Summary</h5>
+                    <p class="card-text">
+                        <strong>Total Colors:</strong> {{ total_colors }}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Color List -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th class="align-middle">Color Preview</th>
+                            <th class="align-middle">Color Name</th>
+                            <th class="align-middle">Hex Code</th>
+                            <th class="align-middle">Type</th>
+                            <th class="align-middle">Sub Type</th>
+                            <th class="align-middle">Brand</th>
+                            <th class="align-middle">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for color in colors %}
+                        <tr>
+                            <td class="align-middle">
+                                <div style="width: 50px; height: 50px; background-color: {{ color.get_hex_color }}; border-radius: 4px; border: 2px solid #ddd;"></div>
+                            </td>
+                            <td class="align-middle"><strong>{{ color.color_name }}</strong></td>
+                            <td class="align-middle">
+                                <span class="font-monospace">{{ color.get_hex_color }}</span>
+                            </td>
+                            <td class="align-middle">
+                                <span class="badge bg-secondary">{{ color.filament_type }}</span>
+                            </td>
+                            <td class="align-middle">
+                                {% if color.filament_sub_type %}
+                                    <span class="badge bg-info">{{ color.filament_sub_type }}</span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="align-middle">{{ color.brand }}</td>
+                            <td class="align-middle">
+                                <a href="{% url 'bambu_run:filament_color_update' color.pk %}" class="btn btn-sm btn-warning">Edit</a>
+                                <a href="{% url 'bambu_run:filament_color_delete' color.pk %}" class="btn btn-sm btn-danger">Delete</a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted">
+                                No colors found. <a href="{% url 'bambu_run:filament_color_create' %}">Add your first color!</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if is_paginated %}
+            <nav>
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item"><a class="page-link" href="?page=1">First</a></li>
+                    <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a></li>
+                    {% endif %}
+
+                    <li class="page-item active"><span class="page-link">{{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+
+                    {% if page_obj.has_next %}
+                    <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a></li>
+                    <li class="page-item"><a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Last</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

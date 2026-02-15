@@ -1,0 +1,37 @@
+{% extends bambu_run_base_template %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h1>Delete Filament Type</h1>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="alert alert-warning">
+                <h5><i class="bi bi-exclamation-triangle"></i> Warning</h5>
+                <p>Are you sure you want to delete this filament type?</p>
+            </div>
+
+            <div class="mb-4">
+                <h5>Type Details:</h5>
+                <p><strong>Type:</strong> {{ object.type }}</p>
+                <p><strong>Sub Type:</strong> {{ object.sub_type|default:"-" }}</p>
+                <p><strong>Brand:</strong> {{ object.brand }}</p>
+            </div>
+
+            <form method="post">
+                {% csrf_token %}
+                <div class="d-flex justify-content-between">
+                    <a href="{% url 'bambu_run:filament_type_list' %}" class="btn btn-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash"></i> Yes, Delete Type
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

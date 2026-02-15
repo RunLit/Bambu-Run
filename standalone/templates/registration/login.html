@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en" data-coreui-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Login - Bambu Run</title>
+    <link href="https://cdn.jsdelivr.net/npm/@coreui/coreui@5.3.0/dist/css/coreui.min.css" rel="stylesheet">
+</head>
+<body class="bg-body-tertiary min-vh-100 d-flex flex-row align-items-center">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-4">
+                <div class="card-group d-block d-md-flex row">
+                    <div class="card p-4">
+                        <div class="card-body">
+                            <h1>Bambu Run</h1>
+                            <p class="text-body-secondary">Sign in to your account</p>
+                            {% if form.errors %}
+                            <div class="alert alert-danger">
+                                Invalid username or password.
+                            </div>
+                            {% endif %}
+                            <form method="post">
+                                {% csrf_token %}
+                                <div class="input-group mb-3">
+                                    <span class="input-group-text">@</span>
+                                    <input type="text" name="username" class="form-control" placeholder="Username" autofocus>
+                                </div>
+                                <div class="input-group mb-4">
+                                    <span class="input-group-text">*</span>
+                                    <input type="password" name="password" class="form-control" placeholder="Password">
+                                </div>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <button class="btn btn-primary px-4" type="submit">Login</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/@coreui/coreui@5.3.0/dist/js/coreui.bundle.min.js"></script>
+</body>
+</html>

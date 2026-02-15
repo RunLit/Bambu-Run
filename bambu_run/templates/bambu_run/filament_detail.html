@@ -1,0 +1,311 @@
+{% extends bambu_run_base_template %}
+{% load static %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'bambu_run/css/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h1>{{ filament }}</h1>
+            <p class="text-body-secondary">Filament Spool Details</p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'bambu_run:filament_update' filament.pk %}" class="btn btn-warning">Edit</a>
+            <a href="{% url 'bambu_run:filament_list' %}" class="btn btn-secondary">Back to List</a>
+        </div>
+    </div>
+
+    <!-- Filament Info Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6>Color</h6>
+                    <div class="d-flex align-items-center">
+                        <div style="width: 50px; height: 50px; background-color: {{ filament.color_hex|default:'#999' }}; border-radius: 8px; margin-right: 15px; border: 2px solid #ddd;"></div>
+                        <div>
+                            <strong>{{ filament.color }}</strong><br>
+                            <small class="text-muted">{{ filament.color_hex }}</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6>Specifications</h6>
+                    <p class="mb-1"><strong>Type:</strong> {{ filament.type }}</p>
+                    {% if filament.sub_type %}
+                    <p class="mb-1"><strong>Sub Type:</strong> {{ filament.sub_type }}</p>
+                    {% endif %}
+                    <p class="mb-1"><strong>Brand:</strong> {{ filament.brand }}</p>
+                    <p class="mb-0"><strong>Diameter:</strong> {{ filament.diameter }}mm</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6>Remaining</h6>
+                    <div class="progress mb-2" style="height: 25px;">
+                        <div class="progress-bar {% if filament.remaining_percent < 20 %}bg-danger{% elif filament.remaining_percent < 50 %}bg-warning{% else %}bg-success{% endif %}"
+                             style="width: {{ filament.remaining_percent }}%;">
+                            {{ filament.remaining_percent }}%
+                        </div>
+                    </div>
+                    <small>{{ filament.remaining_weight_grams|default:"?" }}g of {{ filament.initial_weight_grams|default:"?" }}g</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6>Location</h6>
+                    {% if filament.is_loaded_in_ams %}
+                        <span class="badge bg-success fs-6">AMS Tray {{ filament.current_tray_id }}</span>
+                        <p class="mb-0 mt-2"><small>Loaded: {{ filament.last_loaded_date|date:"Y-m-d H:i" }}</small></p>
+                    {% else %}
+                        <span class="badge bg-secondary fs-6">Storage</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Usage Chart -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <strong>Chart Filters</strong>
+                    <span class="text-muted" id="filamentDateRange">(Last 24 Hours)</span>
+                </div>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <!-- Date Range -->
+                    <div class="d-flex align-items-center gap-1">
+                        <label class="form-label mb-0 small text-body-secondary">From:</label>
+                        <input type="date" class="form-control form-control-sm" id="filamentStartDate" style="width: auto;">
+                    </div>
+                    <div class="d-flex align-items-center gap-1">
+                        <label class="form-label mb-0 small text-body-secondary">To:</label>
+                        <input type="date" class="form-control form-control-sm" id="filamentEndDate" style="width: auto;">
+                    </div>
+                    <!-- Full Day Checkbox -->
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filamentFullDayCheckbox" checked>
+                        <label class="form-check-label small" for="filamentFullDayCheckbox">Full Day</label>
+                    </div>
+                    <!-- Time Range -->
+                    <div class="d-flex align-items-center gap-1" id="filamentTimeRangeControls">
+                        <label class="form-label mb-0 small text-body-secondary">Time:</label>
+                        <select class="form-select form-select-sm" id="filamentStartTime" style="width: auto;" disabled></select>
+                        <span class="text-body-secondary">-</span>
+                        <select class="form-select form-select-sm" id="filamentEndTime" style="width: auto;" disabled></select>
+                    </div>
+                    <!-- Buttons -->
+                    <button type="button" class="btn btn-primary btn-sm" id="refreshFilamentChart">
+                        <svg class="icon"><use xlink:href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/sprites/free.svg#cil-reload"></use></svg>
+                        Refresh
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="resetFilamentChart">
+                        <svg class="icon"><use xlink:href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/sprites/free.svg#cil-action-undo"></use></svg>
+                        Reset
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="chart-container" style="height: 300px;">
+                <canvas id="usageChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Print Jobs -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5>Print Jobs Using This Filament</h5>
+        </div>
+        <div class="card-body">
+            {% if print_usages %}
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Project</th>
+                            <th>Date</th>
+                            <th>Tray</th>
+                            <th>Consumed</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for usage in print_usages %}
+                        <tr>
+                            <td>{{ usage.print_job.project_name }}</td>
+                            <td>{{ usage.print_job.start_time|date:"Y-m-d H:i" }}</td>
+                            <td>Tray {{ usage.tray_id }}</td>
+                            <td>{{ usage.consumed_percent|default:"?" }}% ({{ usage.consumed_grams|default:"?" }}g)</td>
+                            <td><span class="badge bg-{% if usage.print_job.final_status == 'FINISH' %}success{% else %}danger{% endif %}">{{ usage.print_job.final_status }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted">No print jobs recorded yet</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Purchase Info -->
+    {% if filament.purchase_date or filament.purchase_price or filament.supplier %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5>Purchase Information</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                {% if filament.purchase_date %}
+                <div class="col-md-4">
+                    <strong>Purchase Date:</strong> {{ filament.purchase_date|date:"Y-m-d" }}
+                </div>
+                {% endif %}
+                {% if filament.purchase_price %}
+                <div class="col-md-4">
+                    <strong>Price:</strong> ${{ filament.purchase_price }}
+                </div>
+                {% endif %}
+                {% if filament.supplier %}
+                <div class="col-md-4">
+                    <strong>Supplier:</strong> {{ filament.supplier }}
+                </div>
+                {% endif %}
+            </div>
+            {% if filament.notes %}
+            <hr>
+            <strong>Notes:</strong>
+            <p>{{ filament.notes }}</p>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+<script>
+    const filamentId = {{ filament.pk }};
+    let usageChart = null;
+
+    // Populate time selects
+    const startTimeSelect = document.getElementById('filamentStartTime');
+    const endTimeSelect = document.getElementById('filamentEndTime');
+    for (let h = 0; h < 24; h++) {
+        for (let m = 0; m < 60; m += 30) {
+            const timeStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+            startTimeSelect.add(new Option(timeStr, timeStr));
+            endTimeSelect.add(new Option(timeStr, timeStr));
+        }
+    }
+    startTimeSelect.value = '00:00';
+    endTimeSelect.value = '23:30';
+
+    // Initialize date inputs to last 24 hours
+    const now = new Date();
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    document.getElementById('filamentStartDate').value = yesterday.toISOString().split('T')[0];
+    document.getElementById('filamentEndDate').value = now.toISOString().split('T')[0];
+
+    // Full day checkbox handler
+    document.getElementById('filamentFullDayCheckbox').addEventListener('change', function() {
+        const isFullDay = this.checked;
+        startTimeSelect.disabled = isFullDay;
+        endTimeSelect.disabled = isFullDay;
+    });
+
+    // Fetch and render chart
+    async function fetchFilamentUsageData() {
+        const startDate = document.getElementById('filamentStartDate').value;
+        const endDate = document.getElementById('filamentEndDate').value;
+        const isFullDay = document.getElementById('filamentFullDayCheckbox').checked;
+        const startTime = isFullDay ? '00:00' : startTimeSelect.value;
+        const endTime = isFullDay ? '23:59' : endTimeSelect.value;
+
+        const params = new URLSearchParams();
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        if (startTime) params.append('start_time', startTime);
+        if (endTime) params.append('end_time', endTime);
+
+        try {
+            const response = await fetch(`{% url 'bambu_run:filament_usage_api' filament.pk %}?${params.toString()}`);
+            const data = await response.json();
+
+            // Update date range display
+            const dateRangeSpan = document.getElementById('filamentDateRange');
+            if (startDate && endDate) {
+                dateRangeSpan.textContent = `(${startDate} to ${endDate})`;
+            } else {
+                dateRangeSpan.textContent = '(Last 24 Hours)';
+            }
+
+            // Update chart
+            if (usageChart) {
+                usageChart.data.labels = data.timestamps;
+                usageChart.data.datasets[0].data = data.remaining;
+                usageChart.update();
+            } else {
+                const ctx = document.getElementById('usageChart').getContext('2d');
+                usageChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.timestamps,
+                        datasets: [{
+                            label: 'Remaining %',
+                            data: data.remaining,
+                            borderColor: 'rgb(75, 192, 192)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                            tension: 0.3,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 100
+                            }
+                        }
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Error fetching filament usage data:', error);
+        }
+    }
+
+    // Event listeners
+    document.getElementById('refreshFilamentChart').addEventListener('click', fetchFilamentUsageData);
+    document.getElementById('resetFilamentChart').addEventListener('click', function() {
+        const now = new Date();
+        const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        document.getElementById('filamentStartDate').value = yesterday.toISOString().split('T')[0];
+        document.getElementById('filamentEndDate').value = now.toISOString().split('T')[0];
+        document.getElementById('filamentFullDayCheckbox').checked = true;
+        startTimeSelect.disabled = true;
+        endTimeSelect.disabled = true;
+        fetchFilamentUsageData();
+    });
+
+    // Initial load
+    fetchFilamentUsageData();
+</script>
+{% endblock %}

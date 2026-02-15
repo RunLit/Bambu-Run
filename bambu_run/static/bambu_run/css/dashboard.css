@@ -1,0 +1,61 @@
+/* Bambu Run Dashboard Styles */
+
+.chart-container {
+    position: relative;
+    height: 300px;
+}
+
+/* Card styling */
+.infra-card-warning {
+    background: linear-gradient(135deg, #ffc107 0%, #ffb300 100%);
+    color: #000;
+}
+
+.infra-card-info {
+    background: linear-gradient(135deg, #0dcaf0 0%, #0bb5d6 100%);
+    color: #000;
+}
+
+.infra-card-danger {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    color: #fff;
+}
+
+.infra-card-success {
+    background: linear-gradient(135deg, #198754 0%, #157347 100%);
+    color: #fff;
+}
+
+/* Dark mode adjustments */
+[data-coreui-theme="dark"] .infra-card-warning {
+    background: linear-gradient(135deg, #ffb300 0%, #ff8f00 100%);
+    color: #fff;
+}
+
+[data-coreui-theme="dark"] .infra-card-info {
+    background: linear-gradient(135deg, #0bb5d6 0%, #099cbd 100%);
+    color: #fff;
+}
+
+/* Stat display styling */
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.infra-card-warning .card-text,
+.infra-card-info .card-text {
+    opacity: 0.75;
+}
+
+[data-coreui-theme="dark"] .infra-card-warning .card-text,
+[data-coreui-theme="dark"] .infra-card-info .card-text {
+    opacity: 0.9;
+    color: rgba(255, 255, 255, 0.9);
+}

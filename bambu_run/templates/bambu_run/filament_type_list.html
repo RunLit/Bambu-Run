@@ -1,0 +1,99 @@
+{% extends bambu_run_base_template %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1>Filament Type Registry</h1>
+            <p class="text-muted">Manage filament types (material, sub-type, brand)</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{% url 'bambu_run:filament_type_create' %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Add New Type
+            </a>
+            <a href="{% url 'bambu_run:filament_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Inventory
+            </a>
+        </div>
+    </div>
+
+    <!-- Summary Card -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Summary</h5>
+                    <p class="card-text">
+                        <strong>Total Types:</strong> {{ total_types }}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Type List -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th class="align-middle">Type</th>
+                            <th class="align-middle">Sub Type</th>
+                            <th class="align-middle">Brand</th>
+                            <th class="align-middle">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ft in types %}
+                        <tr>
+                            <td class="align-middle">
+                                <span class="badge bg-secondary">{{ ft.type }}</span>
+                            </td>
+                            <td class="align-middle">
+                                {% if ft.sub_type %}
+                                    <span class="badge bg-info">{{ ft.sub_type }}</span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="align-middle">{{ ft.brand }}</td>
+                            <td class="align-middle">
+                                <a href="{% url 'bambu_run:filament_type_update' ft.pk %}" class="btn btn-sm btn-warning">Edit</a>
+                                <a href="{% url 'bambu_run:filament_type_delete' ft.pk %}" class="btn btn-sm btn-danger">Delete</a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">
+                                No filament types found. <a href="{% url 'bambu_run:filament_type_create' %}">Add your first type!</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if is_paginated %}
+            <nav>
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item"><a class="page-link" href="?page=1">First</a></li>
+                    <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a></li>
+                    {% endif %}
+
+                    <li class="page-item active"><span class="page-link">{{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+
+                    {% if page_obj.has_next %}
+                    <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a></li>
+                    <li class="page-item"><a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Last</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

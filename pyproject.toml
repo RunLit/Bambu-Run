@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bambu-run"
+version = "0.1.0"
+description = "Django reusable app for Bambu Lab 3D printer monitoring and filament inventory management"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Runnan Li"},
+]
+keywords = ["django", "bambu-lab", "3d-printer", "filament", "mqtt", "monitoring"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 4.2",
+    "Framework :: Django :: 5.0",
+    "Framework :: Django :: 5.1",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Home Automation",
+]
+dependencies = [
+    "django>=4.2",
+    "bambu-lab-cloud-api",
+]
+
+[project.optional-dependencies]
+standalone = [
+    "gunicorn",
+    "python-dotenv",
+]
+dev = [
+    "ruff",
+    "pytest",
+    "pytest-django",
+]
+
+[project.urls]
+Homepage = "https://github.com/RunLit/Bambu-Run"
+Repository = "https://github.com/RunLit/Bambu-Run"
+Issues = "https://github.com/RunLit/Bambu-Run/issues"
+
+[tool.setuptools.packages.find]
+include = ["bambu_run*"]
+
+[tool.setuptools.package-data]
+bambu_run = [
+    "templates/bambu_run/*.html",
+    "static/bambu_run/**/*",
+]

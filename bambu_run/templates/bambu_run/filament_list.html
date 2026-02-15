@@ -1,0 +1,206 @@
+{% extends bambu_run_base_template %}
+{% load static %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'bambu_run/css/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h1>Filament Inventory</h1>
+            <p class="text-body-secondary">Manage your 3D printer filament spools</p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'bambu_run:filament_type_list' %}" class="btn btn-outline-info me-2">
+                <i class="bi bi-list-ul"></i> Manage Types
+            </a>
+            <a href="{% url 'bambu_run:filament_color_list' %}" class="btn btn-outline-info me-2">
+                <i class="bi bi-palette"></i> Manage Colors
+            </a>
+            <a href="{% url 'bambu_run:filament_create' %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Add Filament
+            </a>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card infra-card-info">
+                <div class="card-body">
+                    <div class="stat-label">Total Spools</div>
+                    <div class="stat-value">{{ total_spools }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card infra-card-success">
+                <div class="card-body">
+                    <div class="stat-label">Loaded in AMS</div>
+                    <div class="stat-value">{{ loaded_spools }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card infra-card-warning">
+                <div class="card-body">
+                    <div class="stat-label">Low Filament (&lt;20%)</div>
+                    <div class="stat-value">{{ low_filaments }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <input type="text" name="search" class="form-control" placeholder="Search..." value="{{ request.GET.search }}">
+                </div>
+                <div class="col-md-3">
+                    <select name="type" class="form-select">
+                        <option value="">All Types</option>
+                        {% for type in filament_types %}
+                        <option value="{{ type }}" {% if request.GET.type == type %}selected{% endif %}>{{ type }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select name="loaded" class="form-select">
+                        <option value="">All Spools</option>
+                        <option value="yes" {% if request.GET.loaded == 'yes' %}selected{% endif %}>Loaded in AMS</option>
+                        <option value="no" {% if request.GET.loaded == 'no' %}selected{% endif %}>Not Loaded</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-secondary">Filter</button>
+                    <a href="{% url 'bambu_run:filament_list' %}" class="btn btn-outline-secondary">Reset</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Filament List -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th class="align-middle">SN</th>
+                            <th class="align-middle">Color</th>
+                            <th class="align-middle">Brand</th>
+                            <th class="align-middle">Type</th>
+                            <th class="align-middle">Sub Type</th>
+                            <th class="align-middle">Remaining</th>
+                            <th class="align-middle">Location</th>
+                            <th class="align-middle">Created By</th>
+                            <th class="align-middle">Last Used</th>
+                            <th class="align-middle">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for filament in filaments %}
+                        <tr>
+                            <td class="align-middle">
+                                {% if filament.tray_uuid %}
+                                    <span class="font-monospace small"
+                                          data-bs-toggle="tooltip"
+                                          data-bs-placement="top"
+                                          title="{{ filament.tray_uuid }}"
+                                          style="cursor: help;">
+                                        {{ filament.tray_uuid|slice:":8" }}...
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="align-middle">
+                                <div class="d-flex align-items-center">
+                                    <div style="width: 30px; height: 30px; background-color: {{ filament.color_hex|default:'#999' }}; border-radius: 4px; margin-right: 10px; border: 1px solid #ddd;"></div>
+                                    {{ filament.color }}
+                                </div>
+                            </td>
+                            <td class="align-middle">{{ filament.brand }}</td>
+                            <td class="align-middle"><span class="badge bg-secondary">{{ filament.type }}</span></td>
+                            <td class="align-middle">
+                                {% if filament.sub_type %}
+                                    <span class="badge bg-info">{{ filament.sub_type }}</span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="align-middle">
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar {% if filament.remaining_percent < 20 %}bg-danger{% elif filament.remaining_percent < 50 %}bg-warning{% else %}bg-success{% endif %}"
+                                         style="width: {{ filament.remaining_percent }}%;">
+                                        {{ filament.remaining_percent }}%
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="align-middle">
+                                {% if filament.is_loaded_in_ams %}
+                                    <span class="badge bg-success">AMS Tray {{ filament.current_tray_id }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Storage</span>
+                                {% endif %}
+                            </td>
+                            <td class="align-middle">
+                                {% if filament.created_by == 'Auto Detection' %}
+                                    <span class="badge bg-primary">Auto</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Manual</span>
+                                {% endif %}
+                            </td>
+                            <td class="align-middle">{{ filament.last_used|date:"Y-m-d H:i"|default:"Never" }}</td>
+                            <td class="align-middle">
+                                <a href="{% url 'bambu_run:filament_detail' filament.pk %}" class="btn btn-sm btn-info">View</a>
+                                <a href="{% url 'bambu_run:filament_update' filament.pk %}" class="btn btn-sm btn-warning">Edit</a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="10" class="text-center text-muted">No filaments found. <a href="{% url 'bambu_run:filament_create' %}">Add your first spool!</a></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if is_paginated %}
+            <nav>
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item"><a class="page-link" href="?page=1">First</a></li>
+                    <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a></li>
+                    {% endif %}
+
+                    <li class="page-item active"><span class="page-link">{{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+
+                    {% if page_obj.has_next %}
+                    <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a></li>
+                    <li class="page-item"><a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Last</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Enable Bootstrap tooltips for SN hover
+    document.addEventListener('DOMContentLoaded', function() {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
+</script>
+{% endblock %}
