@@ -1,8 +1,15 @@
 # Bambu-Run
 
-Unlock deeper control, richer data access, and powerful customization capabilities for your Bambu Lab 3D printer.
+Unlock richer data access and powerful customization capabilities for your Bambu Lab 3D printer.
 
-Bambu-Run is a self-hosted web dashboard that connects to your Bambu Lab printer over your local network via MQTT. It gives you real-time monitoring (temperatures, fan speeds, print progress) and a full filament inventory system — all running on hardware you own.
+Bambu-Run is a self-hosted web dashboard that tracks data of your Bambu Lab printer. It gives you:
+- Real-time monitoring and logging (temperatures, fan speeds, print progress etc) 
+- Automatic filament inventory tracking and usage monitoring system (AMS required)
+all running on hardware you own.
+
+### Hardware Requirement
+
+Recommend a raspberry pi, installed with Raspberry Pi OS (low cost running at the background) or an old PC/Laptop you probably never going to use again (install Linux).
 
 ## Getting Started (Beginner Friendly)
 
@@ -15,23 +22,15 @@ This guide walks you through setting up Bambu-Run on a **Raspberry Pi** from scr
 - Your printer's **IP address**, **access token**, and **serial number** (we'll show you how to find these below)
 - A computer on the same network to SSH into the Pi
 
-### Step 1: Find Your Printer's Connection Details
+### Step 1: Find Your Bambu Lab Account Credentials
 
-You'll need three pieces of information from your printer. Here's how to find them:
+Bambu-Run connects to your printer through the **Bambu Lab Cloud** using your account login — the same email and password you use for Bambu Handy or Bambu Studio.
 
-**IP Address:**
-1. On your printer's touchscreen, go to **Settings** (gear icon)
-2. Tap **Network** — your IP address is shown (e.g. `192.168.1.42`)
+You'll need:
+- **BAMBU_USERNAME** — Your Bambu Lab account email
+- **BAMBU_PASSWORD** — Your Bambu Lab account password
 
-**Access Token:**
-1. On the touchscreen, go to **Settings**
-2. Tap **General** > **Access Code** — note down the 8-character code
-
-**Serial Number:**
-1. On the touchscreen, go to **Settings**
-2. Tap **Device Info** — the serial number is listed at the top
-
-Write all three down. You'll need them in Step 4.
+> **First-time login requires email verification.** Bambu Lab will send a 6-digit code to your email. You'll enter this code during Step 5a below. After that, you'll receive a token that skips verification on future startups.
 
 ### Step 2: Connect to Your Raspberry Pi
 
@@ -58,6 +57,7 @@ curl -fsSL https://get.docker.com | sudo sh
 # Let your user run Docker without sudo
 sudo usermod -aG docker $USER
 ```
+Installation issue? check installation methods for raspberry pi: https://docs.docker.com/engine/install/raspberry-pi-os/#installation-methods
 
 **Important:** Log out and log back in for the group change to take effect:
 
@@ -96,12 +96,11 @@ Now edit the `.env` file with your printer details:
 nano .env
 ```
 
-Fill in the three values you noted in Step 1:
+Fill in your Bambu Lab account credentials from Step 1:
 
 ```
-PRINTER_IP=192.168.1.42
-ACCESS_TOKEN=your8char
-PRINTER_SERIAL=01P00A000000000
+BAMBU_USERNAME=your_email@example.com
+BAMBU_PASSWORD=your_password
 ```
 
 Optionally set your timezone (defaults to UTC):
@@ -114,16 +113,62 @@ TIMEZONE=Australia/Melbourne
 
 To save and exit nano: press `Ctrl + X`, then `Y`, then `Enter`.
 
-### Step 5: Start Bambu-Run
+### Step 5: Build and Start Bambu-Run
+
+First, build the container:
+
+```bash
+docker compose build
+```
+
+This downloads all required software (takes a few minutes the first time).
+
+### Step 5a: First-Time Authentication
+
+The first time you connect, Bambu Lab requires email verification. You need to run the collector **interactively** (not in the background) so you can enter the 6-digit code:
+
+```bash
+docker compose run --rm bambu-run python standalone/manage.py bambu_collector --once
+```
+
+You'll see output like:
+
+```
+BambuLab Authentication
+Authenticating as: your_email@example.com
+...
+EMAIL VERIFICATION REQUIRED
+A verification code has been sent to your email.
+Enter verification code:
+```
+
+1. Check your email for the 6-digit code from Bambu Lab
+2. Type the code and press Enter
+3. On success, you'll see a token printed:
+   ```
+   Authentication successful!
+   Token: eyJhbGciOiJIUzI1N...
+   TIP: Save this token to BAMBU_TOKEN env var to skip login next time
+   ```
+
+4. **Copy the full token** and paste it into your `.env` file:
+   ```bash
+   nano .env
+   ```
+   Add/uncomment the `BAMBU_TOKEN` line:
+   ```
+   BAMBU_TOKEN=eyJhbGciOiJIUzI1N...paste_full_token_here
+   ```
+
+> **Why save the token?** With the token saved, future container restarts authenticate instantly without needing email verification again. Without it, you'd need to repeat this step every time the container restarts.
+
+### Step 5b: Start Bambu-Run
+
+Now start everything in the background:
 
 ```bash
 docker compose up -d
 ```
-
-This will:
-- Download all required software automatically (takes a few minutes the first time)
-- Set up the database
-- Start the web dashboard and printer data collector in the background
 
 Check that it's running:
 
@@ -156,9 +201,13 @@ Log in with the account you just created. You should see your printer dashboard 
 ### Troubleshooting
 
 **"Cannot connect to printer" or no data showing:**
-- Make sure your printer is turned on and connected to the same network
-- Double-check the IP address, access token, and serial number in your `.env` file
+- Make sure your printer is turned on and connected to the network
 - Check the logs: `docker compose logs -f`
+- If you see authentication errors, your token may have expired — re-run Step 5a to get a fresh token
+
+**"Verification code" or "401 Unauthorized" errors:**
+- Your `BAMBU_TOKEN` may have expired. Remove it from `.env` and re-run Step 5a
+- Make sure `BAMBU_USERNAME` and `BAMBU_PASSWORD` are correct in your `.env` file
 
 **"Cannot connect to Docker daemon":**
 - Did you log out and back in after Step 3? Docker group changes require a new session

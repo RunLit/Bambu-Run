@@ -10,7 +10,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     supervisor \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Install bambu-lab-cloud-api without deps (opencv-python is declared but unused at runtime)
+RUN pip install --no-cache-dir bambu-lab-cloud-api --no-deps && \
+    pip install --no-cache-dir paho-mqtt requests flask flask-cors flask-limiter
+
+# Install project and remaining dependencies
 COPY pyproject.toml .
 RUN pip install --no-cache-dir ".[standalone]"
 
