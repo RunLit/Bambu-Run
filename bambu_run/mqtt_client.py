@@ -687,23 +687,24 @@ class BambuPrinter:
         print("BambuLab Authentication")
         print("=" * 60)
         print(f"Authenticating as: {self.username}")
-        print("This may require email verification (2FA)...")
+        print()
+        print(">>> ACTION MAY BE REQUIRED <<<")
+        print("Bambu Lab will send a 6-digit verification code to your")
+        print("registered email. Watch this terminal — if a prompt")
+        print(f"appears below, enter the code and press Enter.")
+        print(f"(You have {verification_code_timeout} seconds to respond.)")
+        print("=" * 60)
         print()
 
         auth = BambuAuthenticator()
 
         try:
-            if self._silent:
-                with suppress_stdout():
-                    token = auth.get_or_create_token(
-                        username=self.username,
-                        password=self.password
-                    )
-            else:
-                token = auth.get_or_create_token(
-                    username=self.username,
-                    password=self.password
-                )
+            # Always show stdout during auth — suppress_stdout would hide
+            # interactive prompts from the library (e.g. verification code input).
+            token = auth.get_or_create_token(
+                username=self.username,
+                password=self.password
+            )
 
             self._token = token
             print("Authentication successful!")
