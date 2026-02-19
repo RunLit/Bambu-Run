@@ -708,7 +708,7 @@ class BambuPrinter:
 
             self._token = token
             print("Authentication successful!")
-            print(f"Token: {token[:20]}...{token[-10:]}")
+            print(f"Token: {token}")
             print("=" * 60 + "\n")
             logger.info("BambuLab token obtained successfully")
             return token
