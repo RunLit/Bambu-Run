@@ -10,6 +10,13 @@
     {% block extra_css %}{% endblock %}
     <style>
         .sidebar-brand { padding: 1rem; font-size: 1.25rem; font-weight: 700; }
+        /* Sidebar collapse layout — standalone only */
+        .wrapper { transition: margin-left 0.15s ease-out; }
+        @media (min-width: 992px) {
+            .sidebar ~ .wrapper { margin-left: 256px; }
+            .sidebar.sidebar-narrow ~ .wrapper,
+            .sidebar.sidebar-narrow-unfoldable ~ .wrapper { margin-left: 56px; }
+        }
     </style>
 </head>
 <body>
@@ -66,7 +73,7 @@
 
         <footer class="footer px-4">
             <div>Bambu Run</div>
-            <div class="ms-auto">Powered by <a href="https://github.com/runnanli/Bambu-Run">Bambu Run</a></div>
+            <div class="ms-auto">Powered by <a href="https://github.com/RunLit/Bambu-Run.git">Bambu Run</a></div>
         </footer>
     </div>
 
