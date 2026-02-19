@@ -1,5 +1,14 @@
 /* Bambu Run Dashboard Styles */
 
+/* Sidebar collapse layout */
+.wrapper { transition: margin-left 0.15s ease-out; }
+
+@media (min-width: 992px) {
+    .sidebar ~ .wrapper { margin-left: 256px; }
+    .sidebar.sidebar-narrow ~ .wrapper,
+    .sidebar.sidebar-narrow-unfoldable ~ .wrapper { margin-left: 56px; }
+}
+
 .chart-container {
     position: relative;
     height: 300px;

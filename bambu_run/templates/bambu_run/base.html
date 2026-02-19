@@ -31,12 +31,16 @@
                 </a>
             </li>
         </ul>
+        <div class="sidebar-footer border-top d-flex">
+            <button class="sidebar-toggler" type="button"></button>
+        </div>
     </div>
 
     <div class="wrapper d-flex flex-column min-vh-100">
         <header class="header header-sticky p-0 mb-4">
             <div class="container-fluid px-4">
-                <button class="header-toggler" type="button" onclick="document.getElementById('sidebar').classList.toggle('show')">
+                <button class="header-toggler d-lg-none" type="button"
+                        onclick="coreui.Sidebar.getInstance(document.querySelector('#sidebar')).toggle()">
                     <svg class="icon icon-lg"><use xlink:href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/sprites/free.svg#cil-menu"></use></svg>
                 </button>
                 <ul class="header-nav ms-auto">
@@ -68,6 +72,22 @@
 
     <!-- CoreUI 5.3 JS CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@coreui/coreui@5.3.0/dist/js/coreui.bundle.min.js"></script>
+    <script>
+        // Sidebar narrow-toggle with state persistence
+        const sidebarToggler = document.querySelector('.sidebar-toggler');
+        const sidebar = document.querySelector('#sidebar');
+        if (sidebarToggler && sidebar) {
+            if (localStorage.getItem('bambu-run-sidebar-narrow') === 'true') {
+                sidebar.classList.add('sidebar-narrow-unfoldable');
+            }
+            sidebarToggler.addEventListener('click', (e) => {
+                e.preventDefault(); e.stopPropagation();
+                const isNarrow = sidebar.classList.contains('sidebar-narrow-unfoldable');
+                sidebar.classList.toggle('sidebar-narrow-unfoldable', !isNarrow);
+                localStorage.setItem('bambu-run-sidebar-narrow', String(!isNarrow));
+            });
+        }
+    </script>
     <script>
         // Theme toggle
         const themeToggle = document.getElementById('themeToggle');
