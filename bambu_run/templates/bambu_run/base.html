@@ -7,9 +7,24 @@
     <!-- CoreUI 5.3 CSS CDN -->
     <link href="https://cdn.jsdelivr.net/npm/@coreui/coreui@5.3.0/dist/css/coreui.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/css/all.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons (for bi-vinyl filament icon) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     {% block extra_css %}{% endblock %}
     <style>
-        .sidebar-brand { padding: 1rem; font-size: 1.25rem; font-weight: 700; }
+        /* Sidebar brand sizing and padding */
+        .sidebar-brand {
+            padding: 1rem 1rem 1.25rem;
+            font-size: 1.25rem;
+            font-weight: 700;
+            min-height: 56px;
+            align-items: center;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+        /* Hide brand text when sidebar is narrow */
+        .sidebar-narrow-unfoldable:not(:hover) .sidebar-brand-text {
+            display: none;
+        }
         /* Sidebar collapse layout — standalone only */
         .wrapper { transition: margin-left 0.15s ease-out; }
         @media (min-width: 992px) {
@@ -17,23 +32,26 @@
             .sidebar.sidebar-narrow ~ .wrapper,
             .sidebar.sidebar-narrow-unfoldable ~ .wrapper { margin-left: 56px; }
         }
+        @media (max-width: 991.98px) {
+            .sidebar ~ .wrapper { margin-left: 0; }
+        }
     </style>
 </head>
 <body>
     <div class="sidebar sidebar-dark sidebar-fixed" id="sidebar">
         <div class="sidebar-brand d-none d-md-flex">
-            Bambu Run
+            <span class="sidebar-brand-text">Bambu Run</span>
         </div>
         <ul class="sidebar-nav" data-coreui="navigation">
             <li class="nav-item">
                 <a class="nav-link" href="{% url 'bambu_run:printer_dashboard' %}">
-                    <svg class="nav-icon"><use xlink:href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/sprites/free.svg#cil-print"></use></svg>
+                    <svg class="nav-icon"><use xlink:href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/sprites/free.svg#cil-expand-down"></use></svg>
                     3D Printer
                 </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link" href="{% url 'bambu_run:filament_list' %}">
-                    <svg class="nav-icon"><use xlink:href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/sprites/free.svg#cil-layers"></use></svg>
+                    <i class="nav-icon bi bi-vinyl"></i>
                     Filament Inventory
                 </a>
             </li>
