@@ -5,6 +5,11 @@
     height: 300px;
 }
 
+.no-data-message {
+    font-size: 0.9rem;
+    font-style: italic;
+}
+
 /* Card styling */
 .infra-card-warning {
     background: linear-gradient(135deg, #ffc107 0%, #ffb300 100%);

@@ -4,9 +4,29 @@
 let nozzleTempChart, bedTempChart, printProgressChart, fanSpeedsChart;
 let wifiSignalChart, amsConditionsChart, layerProgressChart, filamentTimelineChart;
 
+function showNoDataMessage(canvasId) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const container = canvas.closest('.chart-container');
+    if (!container) return;
+    canvas.style.display = 'none';
+    const msg = document.createElement('div');
+    msg.className = 'no-data-message d-flex align-items-center justify-content-center h-100 text-body-secondary';
+    msg.textContent = 'No data available for this period';
+    container.appendChild(msg);
+}
+
 function initPrinterCharts(printerData, apiUrl) {
     // Apply filament card colors
     applyFilamentColors();
+
+    // If no data, show placeholder messages and exit early
+    if (!printerData.timestamps || printerData.timestamps.length === 0) {
+        ['nozzleTempChart', 'bedTempChart', 'printProgressChart', 'fanSpeedsChart',
+         'wifiSignalChart', 'amsConditionsChart', 'layerProgressChart', 'filamentTimelineChart'
+        ].forEach(showNoDataMessage);
+        return;
+    }
 
     // Register the annotation plugin
     if (typeof Chart !== 'undefined' && typeof ChartAnnotation !== 'undefined') {

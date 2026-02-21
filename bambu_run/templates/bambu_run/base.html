@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en" data-coreui-theme="dark">
 <head>
@@ -45,7 +46,7 @@
         <ul class="sidebar-nav" data-coreui="navigation">
             <li class="nav-item">
                 <a class="nav-link" href="{% url 'bambu_run:printer_dashboard' %}">
-                    <svg class="nav-icon"><use xlink:href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/sprites/free.svg#cil-expand-down"></use></svg>
+                    <svg class="nav-icon"><use href="{% static 'bambu_run/vendors/coreui-icons-free.svg' %}#cil-expand-down"></use></svg>
                     3D Printer
                 </a>
             </li>
@@ -66,12 +67,12 @@
             <div class="container-fluid px-4">
                 <button class="header-toggler d-lg-none" type="button"
                         onclick="coreui.Sidebar.getInstance(document.querySelector('#sidebar')).toggle()">
-                    <svg class="icon icon-lg"><use xlink:href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/sprites/free.svg#cil-menu"></use></svg>
+                    <svg class="icon icon-lg"><use href="{% static 'bambu_run/vendors/coreui-icons-free.svg' %}#cil-menu"></use></svg>
                 </button>
                 <ul class="header-nav ms-auto">
                     <li class="nav-item">
                         <button class="nav-link" id="themeToggle" type="button">
-                            <svg class="icon icon-lg"><use xlink:href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/sprites/free.svg#cil-moon"></use></svg>
+                            <svg class="icon icon-lg"><use href="{% static 'bambu_run/vendors/coreui-icons-free.svg' %}#cil-moon"></use></svg>
                         </button>
                     </li>
                     {% if user.is_authenticated %}

@@ -38,6 +38,7 @@ dependencies = [
 standalone = [
     "gunicorn",
     "python-dotenv",
+    "whitenoise",
 ]
 dev = [
     "ruff",
