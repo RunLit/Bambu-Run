@@ -158,7 +158,7 @@
                                         <h6 class="mb-0">Tray {{ filament.tray_id }}</h6>
                                         {% if filament.filament_pk %}
                                         <a href="{% url 'bambu_run:filament_detail' filament.filament_pk %}" class="text-decoration-none" title="View in inventory">
-                                            <svg class="icon icon-sm text-body-secondary"><use xlink:href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/sprites/free.svg#cil-external-link"></use></svg>
+                                            <svg class="icon icon-sm text-body-secondary"><use href="{% static 'bambu_run/vendors/coreui-icons-free.svg' %}#cil-external-link"></use></svg>
                                         </a>
                                         {% endif %}
                                     </div>
@@ -235,11 +235,11 @@
                         </div>
                         <!-- Buttons -->
                         <button type="button" class="btn btn-primary btn-sm" id="refreshPrinterCharts">
-                            <svg class="icon"><use xlink:href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/sprites/free.svg#cil-reload"></use></svg>
+                            <svg class="icon"><use href="{% static 'bambu_run/vendors/coreui-icons-free.svg' %}#cil-reload"></use></svg>
                             Refresh
                         </button>
                         <button type="button" class="btn btn-secondary btn-sm" id="resetPrinterCharts">
-                            <svg class="icon"><use xlink:href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/sprites/free.svg#cil-action-undo"></use></svg>
+                            <svg class="icon"><use href="{% static 'bambu_run/vendors/coreui-icons-free.svg' %}#cil-action-undo"></use></svg>
                             Reset
                         </button>
                     </div>

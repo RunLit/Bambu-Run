@@ -125,7 +125,15 @@ This downloads all required software (takes a few minutes the first time).
 
 ### Step 5a: First-Time Authentication
 
-The first time you connect, Bambu Lab requires email verification. You need to run the collector **interactively** (not in the background) so you can enter the 6-digit code:
+The first time you connect, Bambu Lab requires email verification. You need to run the collector **interactively** (not in the background) so you can enter the 6-digit code.
+
+First, set up the database:
+
+```bash
+docker compose run --rm bambu-run python standalone/manage.py migrate --noinput
+```
+
+Then run the collector (this is what triggers Bambu Lab to send the verification email):
 
 ```bash
 docker compose run --rm bambu-run python standalone/manage.py bambu_collector --once
