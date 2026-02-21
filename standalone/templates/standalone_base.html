@@ -1,0 +1,21 @@
+{% extends "bambu_run/base.html" %}
+{% load static %}
+
+{% block extra_head %}
+<link rel="icon" type="image/png" href="{% static 'favicon-32.png' %}">
+{% endblock %}
+
+{% block sidebar_brand_icon %}
+<img src="{% static 'favicon-64.png' %}" alt="Bambu Run" width="32" height="32" style="flex-shrink:0;">
+{% endblock %}
+
+{% block logout_nav %}
+{% if user.is_authenticated %}
+<li class="nav-item">
+    <form method="post" action="{% url 'logout' %}" style="margin:0;">
+        {% csrf_token %}
+        <button type="submit" class="nav-link">Logout</button>
+    </form>
+</li>
+{% endif %}
+{% endblock %}

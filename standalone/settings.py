@@ -91,6 +91,7 @@ USE_TZ = True
 # Static files
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [BASE_DIR / "standalone" / "static"]
 STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
 
 # Default primary key field type
@@ -103,7 +104,7 @@ LOGOUT_REDIRECT_URL = "/accounts/login/"
 
 # Bambu Run settings
 BAMBU_RUN_TIMEZONE = os.environ.get("TIMEZONE", "UTC")
-BAMBU_RUN_BASE_TEMPLATE = "bambu_run/base.html"
+BAMBU_RUN_BASE_TEMPLATE = "standalone_base.html"
 
 # Printer connection — read from environment
 PRINTER_IP = os.environ.get("PRINTER_IP", "")
