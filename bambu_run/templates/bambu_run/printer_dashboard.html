@@ -203,6 +203,7 @@
     </div>
 
     <!-- Date/Time Filter Controls -->
+    {% if not is_basic_user %}
     <div class="row mb-4">
         <div class="col-12">
             <div class="card">
@@ -247,6 +248,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
     <!-- Filament Timeline Chart - Full Width -->
     <div class="row g-3 mb-4">
@@ -372,6 +374,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1"></script>
 <script src="{% static 'bambu_run/js/printer_charts.js' %}"></script>
 <script src="{% static 'bambu_run/js/printer_charts_control.js' %}"></script>
+{% if not is_basic_user %}
 <div id="printerApiUrl" data-url="{% url 'bambu_run:printer_api' %}" style="display: none;"></div>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -387,4 +390,18 @@
         }
     });
 </script>
+{% else %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const printerData = {{ printer_data_json|safe }};
+        initPrinterCharts(printerData, null);
+
+        if (printerData.project_markers && printerData.project_markers.length > 0) {
+            setTimeout(function() {
+                addProjectMarkersToCharts(printerData.project_markers, printerData.timestamps);
+            }, 500);
+        }
+    });
+</script>
+{% endif %}
 {% endblock %}

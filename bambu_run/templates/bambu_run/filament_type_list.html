@@ -9,9 +9,11 @@
             <p class="text-muted">Manage filament types (material, sub-type, brand)</p>
         </div>
         <div class="col-md-4 text-end">
+            {% if not is_basic_user %}
             <a href="{% url 'bambu_run:filament_type_create' %}" class="btn btn-primary">
                 <i class="bi bi-plus-circle"></i> Add New Type
             </a>
+            {% endif %}
             <a href="{% url 'bambu_run:filament_list' %}" class="btn btn-outline-secondary">
                 <i class="bi bi-arrow-left"></i> Back to Inventory
             </a>
@@ -60,8 +62,10 @@
                             </td>
                             <td class="align-middle">{{ ft.brand }}</td>
                             <td class="align-middle">
+                                {% if not is_basic_user %}
                                 <a href="{% url 'bambu_run:filament_type_update' ft.pk %}" class="btn btn-sm btn-warning">Edit</a>
                                 <a href="{% url 'bambu_run:filament_type_delete' ft.pk %}" class="btn btn-sm btn-danger">Delete</a>
+                                {% endif %}
                             </td>
                         </tr>
                         {% empty %}

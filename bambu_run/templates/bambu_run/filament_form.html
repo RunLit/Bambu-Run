@@ -145,7 +145,7 @@
                         <button type="submit" class="btn btn-primary">Save</button>
                         <a href="{% url 'bambu_run:filament_list' %}" class="btn btn-secondary">Cancel</a>
                     </div>
-                    {% if form.instance.pk %}
+                    {% if form.instance.pk and not is_basic_user %}
                     <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal" id="deleteBtn">
                         <i class="bi bi-trash-fill me-1"></i>Delete
                     </button>
