@@ -12,6 +12,7 @@
             <h1>Filament Inventory</h1>
             <p class="text-body-secondary">Manage your 3D printer filament spools</p>
         </div>
+        {% if not is_basic_user %}
         <div class="col-auto">
             <a href="{% url 'bambu_run:filament_type_list' %}" class="btn btn-outline-info me-2">
                 <i class="bi bi-list-ul"></i> Manage Types
@@ -23,6 +24,7 @@
                 <i class="bi bi-plus-circle"></i> Add Filament
             </a>
         </div>
+        {% endif %}
     </div>
 
     <!-- Summary Cards -->
@@ -158,7 +160,9 @@
                             <td class="align-middle">{{ filament.last_used|date:"Y-m-d H:i"|default:"Never" }}</td>
                             <td class="align-middle">
                                 <a href="{% url 'bambu_run:filament_detail' filament.pk %}" class="btn btn-sm btn-info">View</a>
+                                {% if not is_basic_user %}
                                 <a href="{% url 'bambu_run:filament_update' filament.pk %}" class="btn btn-sm btn-warning">Edit</a>
+                                {% endif %}
                             </td>
                         </tr>
                         {% empty %}

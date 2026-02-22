@@ -17,6 +17,11 @@ from .forms import FilamentForm, FilamentColorForm, FilamentTypeForm
 class PrinterDashboardView(LoginRequiredMixin, TemplateView):
     template_name = "bambu_run/printer_dashboard.html"
 
+    def _get_date_range(self, request):
+        """Return (start_dt, end_dt) for the dashboard query. Override for custom date logic."""
+        time_24h_ago = timezone.now() - timedelta(hours=24)
+        return time_24h_ago, None  # None means "now"
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['bambu_run_base_template'] = app_settings.BASE_TEMPLATE
@@ -34,11 +39,14 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
 
         tz = zoneinfo.ZoneInfo(app_settings.TIMEZONE)
 
-        # Last 24 hours of live data
-        time_24h_ago = timezone.now() - timedelta(hours=24)
+        # Get date range (overridable by subclasses)
+        start_dt, end_dt = self._get_date_range(self.request)
         metrics = PrinterMetrics.objects.filter(
-            device=printer_device, timestamp__gte=time_24h_ago
-        ).prefetch_related('filament_snapshots').order_by("timestamp")
+            device=printer_device, timestamp__gte=start_dt
+        )
+        if end_dt:
+            metrics = metrics.filter(timestamp__lte=end_dt)
+        metrics = metrics.prefetch_related('filament_snapshots').order_by("timestamp")
 
         latest_metric = metrics.last()
 

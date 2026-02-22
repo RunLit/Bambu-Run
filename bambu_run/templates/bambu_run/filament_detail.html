@@ -13,7 +13,9 @@
             <p class="text-body-secondary">Filament Spool Details</p>
         </div>
         <div class="col-auto">
+            {% if not is_basic_user %}
             <a href="{% url 'bambu_run:filament_update' filament.pk %}" class="btn btn-warning">Edit</a>
+            {% endif %}
             <a href="{% url 'bambu_run:filament_list' %}" class="btn btn-secondary">Back to List</a>
         </div>
     </div>
@@ -78,6 +80,7 @@
 
     <!-- Usage Chart -->
     <div class="card mb-4">
+        {% if not is_basic_user %}
         <div class="card-header">
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <div>
@@ -118,6 +121,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
         <div class="card-body">
             <div class="chart-container" style="height: 300px;">
                 <canvas id="usageChart"></canvas>
@@ -199,6 +203,7 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+{% if not is_basic_user %}
 <script>
     const filamentId = {{ filament.pk }};
     let usageChart = null;
@@ -308,4 +313,19 @@
     // Initial load
     fetchFilamentUsageData();
 </script>
+{% else %}
+<script>
+    // Basic user: render static chart from server-provided data if available
+    document.addEventListener('DOMContentLoaded', function() {
+        const ctx = document.getElementById('usageChart');
+        if (ctx) {
+            new Chart(ctx.getContext('2d'), {
+                type: 'line',
+                data: { labels: [], datasets: [{ label: 'Remaining %', data: [], borderColor: 'rgb(75, 192, 192)', backgroundColor: 'rgba(75, 192, 192, 0.1)', tension: 0.3, fill: true }] },
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100 } } }
+            });
+        }
+    });
+</script>
+{% endif %}
 {% endblock %}
