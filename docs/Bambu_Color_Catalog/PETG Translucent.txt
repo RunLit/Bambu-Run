@@ -1,0 +1,8 @@
+Translucent Gray	#8E8E8E
+Translucent Light Blue	#61B0FF
+Translucent Olive	#748C45
+Translucent Brown	#C9A381
+Translucent Teal	#77EDD7
+Translucent Orange	#FF911A
+Translucent Purple	#D6ABFF
+Translucent Pink	#F9C1BD

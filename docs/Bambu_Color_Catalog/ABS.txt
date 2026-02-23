@@ -1,0 +1,24 @@
+White
+Hex:#FFFFFF
+Bambu Green
+Hex:#00AE42
+Olive
+Hex:#789D4A
+Azure
+Hex:#489FDF
+Navy Blue
+Hex:#0C2340
+Blue
+Hex:#0A2CA5
+Tangerine Yellow
+Hex:#FFC72C
+Orange
+Hex:#FF6A13
+Red
+Hex:#D32941
+Purple
+Hex:#AF1685
+Silver
+Hex:#87909A
+Black
+Hex:#000000

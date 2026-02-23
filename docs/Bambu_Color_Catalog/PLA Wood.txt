@@ -1,0 +1,6 @@
+Black Walnut	#4F3F24
+Rosewood	#4C241C
+Clay Brown	#995F11
+Classic Birch	#918669
+White Oak	#D6CCA3
+Ochre Yellow	#C98935

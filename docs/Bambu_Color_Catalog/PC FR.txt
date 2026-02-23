@@ -1,0 +1,3 @@
+White	#FFFFFF
+Gray	#A8A8AA
+Black	#000000

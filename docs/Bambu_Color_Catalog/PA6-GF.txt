@@ -1,0 +1,8 @@
+White	#EAEAE4
+Yellow	#FFCE00
+Lime	#C5ED48
+Blue	#75AED8
+Orange	#FF4800
+Brown	#5B492F
+Gray	#353533
+Black	#000000
