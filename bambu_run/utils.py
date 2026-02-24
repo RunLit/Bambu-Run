@@ -2,6 +2,10 @@
 Utility functions for filament color matching
 """
 
+# BambuLab AMS reports colors as 8-char hex with an alpha channel suffix (e.g. '489FDFFF').
+# The last two chars are always 'FF' (fully opaque). Only the first 6 chars are the RGB value.
+MQTT_COLOR_HEX_LENGTH = 6
+
 
 def strip_color_padding(mqtt_color):
     """
@@ -12,8 +16,8 @@ def strip_color_padding(mqtt_color):
     if not mqtt_color:
         return None
     if len(mqtt_color) == 8:
-        return mqtt_color[:6].upper()
-    return mqtt_color[:6].upper() if len(mqtt_color) >= 6 else mqtt_color.upper()
+        return mqtt_color[:MQTT_COLOR_HEX_LENGTH].upper()
+    return mqtt_color[:MQTT_COLOR_HEX_LENGTH].upper() if len(mqtt_color) >= MQTT_COLOR_HEX_LENGTH else mqtt_color.upper()
 
 
 def match_filament_color(filament_type, filament_sub_type, color_code, brand='Bambu Lab'):
