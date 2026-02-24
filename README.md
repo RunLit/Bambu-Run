@@ -4,18 +4,17 @@
   <img src="docs/BambuRun.png" alt="Bambu-Run Logo" width="300"/>
 </p>
 
-Unlock richer data access and powerful customization capabilities for your Bambu Lab 3D printer.
+Richer data, powerful customization for your Bambu Lab 3D printer.
 
-Bambu-Run is a self-hosted web dashboard that tracks data of your Bambu Lab printer. It gives you:
-- Real-time monitoring and logging (temperatures, fan speeds, print progress etc)
-- Automatic filament inventory tracking and usage monitoring system (AMS required)
-all running on hardware you own.
+Bambu-Run is a self-hosted web dashboard that gives you:
+- Real-time monitoring and logging (temperatures, fan speeds, print progress, and more)
+- Automatic filament inventory tracking and usage monitoring (AMS required)
+
+All running on hardware you own.
 
 ### What You'll Need
 
-Any always-on device: 
-- A **Raspberry Pi** (3B+, 4, or 5) is ideal: beginner-friendly, runs Raspberry Pi OS out of the box, and silent enough to tuck behind a desk. 
-- Or an old PC or laptop with Linux works too.
+Any always-on device works — a **Raspberry Pi** (3B+, 4, or 5) is ideal: beginner-friendly, runs Raspberry Pi OS out of the box, and quiet enough to tuck behind a desk. An old PC or laptop with Linux works too.
 
 It runs quietly in the background 24/7, capturing every print, filament change, and AMS update the moment it happens. And the power bill? A Raspberry Pi 4 under light load draws about **5W**. That's roughly **43.8 kWh per year**, or the cost of **three cups of coffee**. ☕☕☕ Tuck it out of sight and forget it's there.
 
@@ -173,7 +172,7 @@ Your data is preserved in a Docker volume and will be there when you start it ag
 
 ## Batch Importing Filament Colors and Filament Types
 
-Bambu-Run ships with a full Bambu Lab color catalog under `docs/Bambu_Color_Catalog/` (one `.txt` file per filament sub-type, e.g. `PLA Basic.txt`, `PETG HF.txt`). Importing these populates the **Filament Colors** database so the dashboard can show proper color names instead of raw hex codes. 
+Bambu-Run ships with a full Bambu Lab color catalog under `docs/Bambu_Color_Catalog/` (one `.txt` file per filament sub-type, e.g. `PLA Basic.txt`, `PETG HF.txt`). Importing these populates the **Filament Colors** database so the dashboard shows proper color names instead of raw hex codes.
 
 ### Adding your own colors
 
@@ -198,9 +197,7 @@ Bambu Lab's website filament pages and their downloadable PDF catalogs are a rel
 
 ### When to run this
 
-When you're lazy and don't want to add all possible color by manual input.
-
-Run the import **once after first setup**, and again any time you want to add colors for a new filament type. Re-running is safe — duplicates are detected and skipped automatically.
+Run the import **once after first setup** to seed the full color catalog in one go, rather than adding colors one by one. Run it again any time you want to add colors for a new filament type. Re-running is always safe — duplicates are detected and skipped automatically.
 
 ### Import all colors (recommended)
 
