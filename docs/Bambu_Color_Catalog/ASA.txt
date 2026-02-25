@@ -1,0 +1,6 @@
+White	#FFFAF2
+Gray	#8A949E
+Red	#E02928
+Green	#00A6A0
+Blue	#2140B4
+Black	#000000

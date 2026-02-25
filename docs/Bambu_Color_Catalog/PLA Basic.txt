@@ -1,0 +1,60 @@
+Jade White
+Hex:#FFFFFF
+Magenta
+Hex:#EC008C
+Gold
+Hex:#E4BD68
+Mistletoe Green
+Hex:#3F8E43
+Red
+Hex:#C12E1F
+Purple
+Hex:#5E43B7
+Beige
+Hex:#F7E6DE
+Pink
+Hex:#F55A74
+Sunflower Yellow
+Hex:#FEC600
+Bronze
+Hex:#847D48
+Turquoise
+Hex:#00B1B7
+Indigo Purple
+Hex:#482960
+Light Gray
+Hex:#D1D3D5
+Hot Pink
+Hex:#F5547C
+Yellow
+Hex:#F4EE2A
+Cocoa Brown
+Hex:#6F5034
+Cyan
+Hex:#0086D6
+Blue Grey
+Hex:#5B6579
+Silver
+Hex:#A6A9AA
+Orange
+Hex:#FF6A13
+Bright Green
+Hex:#BECF00
+Brown
+Hex:#9D432C
+Blue
+Hex:#0A2989
+Dark Gray
+Hex:#545454
+Gray
+Hex:#8E9089
+Pumpkin Orange
+Hex:#FF9016
+Bambu Green
+Hex:#00AE42
+Maroon Red
+Hex:#9D2235
+Cobalt Blue
+Hex:#0056B8
+Black
+Hex:#000000

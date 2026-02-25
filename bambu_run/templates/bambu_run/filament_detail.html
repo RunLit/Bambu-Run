@@ -84,7 +84,7 @@
         <div class="card-header">
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <div>
-                    <strong>Chart Filters</strong>
+                    <strong>Filament Usage History</strong>
                     <span class="text-muted" id="filamentDateRange">(Last 24 Hours)</span>
                 </div>
                 <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -111,11 +111,11 @@
                     </div>
                     <!-- Buttons -->
                     <button type="button" class="btn btn-primary btn-sm" id="refreshFilamentChart">
-                        <svg class="icon"><use xlink:href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/sprites/free.svg#cil-reload"></use></svg>
+                        <svg class="icon"><use href="{% static 'bambu_run/vendors/coreui-icons-free.svg' %}#cil-reload"></use></svg>
                         Refresh
                     </button>
                     <button type="button" class="btn btn-secondary btn-sm" id="resetFilamentChart">
-                        <svg class="icon"><use xlink:href="https://cdn.jsdelivr.net/npm/@coreui/icons@3.0.1/sprites/free.svg#cil-action-undo"></use></svg>
+                        <svg class="icon"><use href="{% static 'bambu_run/vendors/coreui-icons-free.svg' %}#cil-action-undo"></use></svg>
                         Reset
                     </button>
                 </div>
@@ -203,126 +203,39 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1"></script>
 {% if not is_basic_user %}
+{# Inject Django-specific values that the static JS file cannot know #}
 <script>
-    const filamentId = {{ filament.pk }};
-    let usageChart = null;
-
-    // Populate time selects
-    const startTimeSelect = document.getElementById('filamentStartTime');
-    const endTimeSelect = document.getElementById('filamentEndTime');
-    for (let h = 0; h < 24; h++) {
-        for (let m = 0; m < 60; m += 30) {
-            const timeStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-            startTimeSelect.add(new Option(timeStr, timeStr));
-            endTimeSelect.add(new Option(timeStr, timeStr));
-        }
-    }
-    startTimeSelect.value = '00:00';
-    endTimeSelect.value = '23:30';
-
-    // Initialize date inputs to last 24 hours
-    const now = new Date();
-    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    document.getElementById('filamentStartDate').value = yesterday.toISOString().split('T')[0];
-    document.getElementById('filamentEndDate').value = now.toISOString().split('T')[0];
-
-    // Full day checkbox handler
-    document.getElementById('filamentFullDayCheckbox').addEventListener('change', function() {
-        const isFullDay = this.checked;
-        startTimeSelect.disabled = isFullDay;
-        endTimeSelect.disabled = isFullDay;
-    });
-
-    // Fetch and render chart
-    async function fetchFilamentUsageData() {
-        const startDate = document.getElementById('filamentStartDate').value;
-        const endDate = document.getElementById('filamentEndDate').value;
-        const isFullDay = document.getElementById('filamentFullDayCheckbox').checked;
-        const startTime = isFullDay ? '00:00' : startTimeSelect.value;
-        const endTime = isFullDay ? '23:59' : endTimeSelect.value;
-
-        const params = new URLSearchParams();
-        if (startDate) params.append('start_date', startDate);
-        if (endDate) params.append('end_date', endDate);
-        if (startTime) params.append('start_time', startTime);
-        if (endTime) params.append('end_time', endTime);
-
-        try {
-            const response = await fetch(`{% url 'bambu_run:filament_usage_api' filament.pk %}?${params.toString()}`);
-            const data = await response.json();
-
-            // Update date range display
-            const dateRangeSpan = document.getElementById('filamentDateRange');
-            if (startDate && endDate) {
-                dateRangeSpan.textContent = `(${startDate} to ${endDate})`;
-            } else {
-                dateRangeSpan.textContent = '(Last 24 Hours)';
-            }
-
-            // Update chart
-            if (usageChart) {
-                usageChart.data.labels = data.timestamps;
-                usageChart.data.datasets[0].data = data.remaining;
-                usageChart.update();
-            } else {
-                const ctx = document.getElementById('usageChart').getContext('2d');
-                usageChart = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: data.timestamps,
-                        datasets: [{
-                            label: 'Remaining %',
-                            data: data.remaining,
-                            borderColor: 'rgb(75, 192, 192)',
-                            backgroundColor: 'rgba(75, 192, 192, 0.1)',
-                            tension: 0.3,
-                            fill: true
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                max: 100
-                            }
-                        }
-                    }
-                });
-            }
-        } catch (error) {
-            console.error('Error fetching filament usage data:', error);
-        }
-    }
-
-    // Event listeners
-    document.getElementById('refreshFilamentChart').addEventListener('click', fetchFilamentUsageData);
-    document.getElementById('resetFilamentChart').addEventListener('click', function() {
-        const now = new Date();
-        const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        document.getElementById('filamentStartDate').value = yesterday.toISOString().split('T')[0];
-        document.getElementById('filamentEndDate').value = now.toISOString().split('T')[0];
-        document.getElementById('filamentFullDayCheckbox').checked = true;
-        startTimeSelect.disabled = true;
-        endTimeSelect.disabled = true;
-        fetchFilamentUsageData();
-    });
-
-    // Initial load
-    fetchFilamentUsageData();
+    const FILAMENT_USAGE_API_URL = "{% url 'bambu_run:filament_usage_api' filament.pk %}";
 </script>
+<script src="{% static 'bambu_run/js/filament_detail.js' %}"></script>
 {% else %}
 <script>
-    // Basic user: render static chart from server-provided data if available
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         const ctx = document.getElementById('usageChart');
         if (ctx) {
             new Chart(ctx.getContext('2d'), {
                 type: 'line',
-                data: { labels: [], datasets: [{ label: 'Remaining %', data: [], borderColor: 'rgb(75, 192, 192)', backgroundColor: 'rgba(75, 192, 192, 0.1)', tension: 0.3, fill: true }] },
-                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100 } } }
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Remaining %',
+                        data: [],
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                        tension: 0.3,
+                        fill: true,
+                        pointRadius: 0,
+                        pointHoverRadius: 3,
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true, max: 100 } }
+                }
             });
         }
     });

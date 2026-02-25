@@ -55,7 +55,7 @@ function initPrinterCharts(printerData, apiUrl) {
                     tension: 0.3,
                     borderWidth: 2,
                     pointRadius: 0,
-                    pointHoverRadius: 5,
+                    pointHoverRadius: 3,
                     spanGaps: true
                 },
                 {
@@ -67,7 +67,7 @@ function initPrinterCharts(printerData, apiUrl) {
                     tension: 0.3,
                     borderWidth: 2,
                     pointRadius: 0,
-                    pointHoverRadius: 5,
+                    pointHoverRadius: 3,
                     spanGaps: true
                 }
             ]
@@ -90,7 +90,7 @@ function initPrinterCharts(printerData, apiUrl) {
                     tension: 0.3,
                     borderWidth: 2,
                     pointRadius: 0,
-                    pointHoverRadius: 5,
+                    pointHoverRadius: 3,
                     spanGaps: true
                 },
                 {
@@ -102,7 +102,7 @@ function initPrinterCharts(printerData, apiUrl) {
                     tension: 0.3,
                     borderWidth: 2,
                     pointRadius: 0,
-                    pointHoverRadius: 5,
+                    pointHoverRadius: 3,
                     spanGaps: true
                 }
             ]
@@ -125,7 +125,7 @@ function initPrinterCharts(printerData, apiUrl) {
                     tension: 0.3,
                     borderWidth: 2,
                     pointRadius: 0,
-                    pointHoverRadius: 5,
+                    pointHoverRadius: 3,
                     fill: true
                 }
             ]
@@ -148,7 +148,7 @@ function initPrinterCharts(printerData, apiUrl) {
                     tension: 0.3,
                     borderWidth: 2,
                     pointRadius: 0,
-                    pointHoverRadius: 5,
+                    pointHoverRadius: 3,
                     spanGaps: true
                 },
                 {
@@ -159,7 +159,7 @@ function initPrinterCharts(printerData, apiUrl) {
                     tension: 0.3,
                     borderWidth: 2,
                     pointRadius: 0,
-                    pointHoverRadius: 5,
+                    pointHoverRadius: 3,
                     spanGaps: true
                 }
             ]
@@ -182,7 +182,7 @@ function initPrinterCharts(printerData, apiUrl) {
                     tension: 0.3,
                     borderWidth: 2,
                     pointRadius: 0,
-                    pointHoverRadius: 5,
+                    pointHoverRadius: 3,
                     spanGaps: true
                 }
             ]
@@ -246,7 +246,7 @@ function initPrinterCharts(printerData, apiUrl) {
                     tension: 0.3,
                     borderWidth: 2,
                     pointRadius: 0,
-                    pointHoverRadius: 5,
+                    pointHoverRadius: 3,
                     yAxisID: 'y',
                     spanGaps: true
                 },
@@ -258,7 +258,7 @@ function initPrinterCharts(printerData, apiUrl) {
                     tension: 0.3,
                     borderWidth: 2,
                     pointRadius: 0,
-                    pointHoverRadius: 5,
+                    pointHoverRadius: 3,
                     yAxisID: 'y1',
                     spanGaps: true
                 }
@@ -342,7 +342,7 @@ function initPrinterCharts(printerData, apiUrl) {
                     tension: 0.3,
                     borderWidth: 2,
                     pointRadius: 0,
-                    pointHoverRadius: 5,
+                    pointHoverRadius: 3,
                     fill: true
                 },
                 {
@@ -354,7 +354,7 @@ function initPrinterCharts(printerData, apiUrl) {
                     tension: 0.3,
                     borderWidth: 2,
                     pointRadius: 0,
-                    pointHoverRadius: 5,
+                    pointHoverRadius: 3,
                     spanGaps: true
                 }
             ]
@@ -451,6 +451,11 @@ function initPrinterCharts(printerData, apiUrl) {
             }
         }
     });
+
+    // Add date separator markers when data spans multiple days
+    if (printerData.dates && printerData.dates.length > 0) {
+        applyDateSeparatorsToAllPrinterCharts(printerData.timestamps, printerData.dates);
+    }
 
     // Set up theme observer for dynamic theme switching
     setupThemeObserver();
@@ -623,7 +628,7 @@ function createFilamentDatasets(filamentTimeline, timestamps) {
             tension: 0.3,
             borderWidth: 2,
             pointRadius: 0,
-            pointHoverRadius: 5,
+            pointHoverRadius: 3,
             spanGaps: false  // Don't connect across null values (filament changes)
         });
     });
@@ -729,5 +734,81 @@ function setupThemeObserver() {
     observer.observe(document.documentElement, {
         attributes: true,
         attributeFilter: ['data-coreui-theme']
+    });
+}
+
+/**
+ * Build date-separator annotations for multi-day charts.
+ * Detects where consecutive dates differ and returns a vertical dotted line
+ * annotation at each boundary index, labelled with the new date.
+ *
+ * @param {string[]} timestamps - HH:MM display labels (one per data point)
+ * @param {string[]} dates      - YYYY-MM-DD dates (same length as timestamps)
+ * @returns {Object} chartjs-plugin-annotation annotations keyed as "dateSep_N"
+ */
+function buildDateSeparatorAnnotations(timestamps, dates) {
+    const annotations = {};
+    if (!dates || dates.length < 2) return annotations;
+
+    let count = 0;
+    for (let i = 1; i < dates.length; i++) {
+        if (dates[i] !== dates[i - 1]) {
+            // Format date as "Feb 25" for a compact label
+            const d = new Date(dates[i] + 'T00:00:00');
+            const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+            annotations['dateSep_' + count] = {
+                type: 'line',
+                scaleID: 'x',
+                value: i,
+                borderColor: 'rgba(128, 128, 128, 0.45)',
+                borderWidth: 1,
+                borderDash: [4, 4],
+                drawTime: 'beforeDatasetsDraw',
+                label: {
+                    display: true,
+                    content: label,
+                    position: 'end',
+                    backgroundColor: 'rgba(100, 100, 100, 0.65)',
+                    color: '#fff',
+                    font: { size: 9 },
+                    padding: { x: 4, y: 2 }
+                }
+            };
+            count++;
+        }
+    }
+    return annotations;
+}
+
+/**
+ * Apply date-separator annotations to all printer charts.
+ * Preserves any existing "marker_*" (project marker) annotations.
+ *
+ * @param {string[]} timestamps
+ * @param {string[]} dates
+ */
+function applyDateSeparatorsToAllPrinterCharts(timestamps, dates) {
+    const sepAnnotations = buildDateSeparatorAnnotations(timestamps, dates);
+
+    const charts = [
+        nozzleTempChart, bedTempChart, printProgressChart, fanSpeedsChart,
+        wifiSignalChart, amsConditionsChart, layerProgressChart, filamentTimelineChart
+    ];
+
+    charts.forEach(chart => {
+        if (!chart) return;
+        if (!chart.options.plugins.annotation) {
+            chart.options.plugins.annotation = { annotations: {} };
+        }
+        const existing = chart.options.plugins.annotation.annotations;
+
+        // Remove any old dateSep_* entries then re-add updated ones
+        Object.keys(existing).forEach(key => {
+            if (key.startsWith('dateSep_')) delete existing[key];
+        });
+        Object.assign(existing, sepAnnotations);
+
+        chart.update('none');
     });
 }

@@ -1,0 +1,14 @@
+Yellow	#FFD00B
+Orange	#F75403
+Green	#00AE42
+Red	#EB3A3A
+Blue	#002E96
+Black	#000000
+White	#FFFFFF
+Cream	#F9DFB9
+Lime Green	#6EE53C
+Forest Green	#39541A
+Lake Blue	#1F79E5
+Peanut Brown	#875718
+Gray	#ADB1B2
+Dark Gray	#515151

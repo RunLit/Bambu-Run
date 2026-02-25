@@ -332,7 +332,6 @@ class Command(BaseCommand):
         color_code = strip_color_padding(mqtt_color)
         color_hex = f"#{color_code}" if color_code else None
 
-        color_name = mqtt_color
         filament_color = match_filament_color(
             filament_type=type_val,
             filament_sub_type=sub_type,
@@ -345,7 +344,7 @@ class Command(BaseCommand):
             if self.verbose:
                 logger.info(f"Matched color from database: {color_name} (#{color_code})")
         else:
-            color_name = mqtt_color
+            color_name = color_hex or mqtt_color
             if self.verbose:
                 logger.warning(
                     f"No color match in database for {type_val} {sub_type} #{color_code}. "

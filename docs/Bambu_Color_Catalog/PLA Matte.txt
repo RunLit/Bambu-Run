@@ -1,0 +1,50 @@
+Ivory White
+Hex:#FFFFFF
+Bone White
+Hex:#CBC6B8
+Desert Tan
+Hex:#E8DBB7
+Latte Brown
+Hex:#D3B7A7
+Caramel
+Hex:#AE835B
+Terracotta
+Hex:#B15533
+Dark Brown
+Hex:#7D6556
+Dark Chocolate
+Hex:#4D3324
+Lilac Purple
+Hex:#AE96D4
+Sakura Pink
+Hex:#E8AFCF
+Mandarin Orange
+Hex:#F99963
+Lemon Yellow
+Hex:#F7D959
+Plum
+Hex:#950051
+Scarlet Red
+Hex:#DE4343
+Dark Red
+Hex:#BB3D43
+Dark Green
+Hex:#68724D
+Grass Green
+Hex:#61C680
+Apple Green
+Hex:#C2E189
+Ice Blue
+Hex:#A3D8E1
+Sky Blue
+Hex:#56B7E6
+Marine Blue
+Hex:#0078BF
+Dark Blue
+Hex:#042F56
+Ash Gray
+Hex:#9B9EA0
+Nardo Gray
+Hex:#757575
+Charcoal
+Hex:#000000
