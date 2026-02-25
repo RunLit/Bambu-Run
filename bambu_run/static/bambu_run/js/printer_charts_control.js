@@ -77,11 +77,12 @@ function populateTimeDropdowns(startSelect, endSelect) {
     }
 
     times.forEach(time => {
-        const option1 = new Option(time, time);
-        const option2 = new Option(time, time);
-        startSelect.add(option1);
-        endSelect.add(option2);
+        startSelect.add(new Option(time, time));
+        endSelect.add(new Option(time, time));
     });
+
+    // End-time gets one extra option so the last minute of the day is reachable
+    endSelect.add(new Option('23:59', '23:59'));
 }
 
 /**
@@ -235,6 +236,11 @@ function updateAllPrinterCharts(data) {
         filamentTimelineChart.update();
     }
 
+    // Apply date separator markers (multi-day views)
+    if (data.dates && data.dates.length > 0) {
+        applyDateSeparatorsToAllPrinterCharts(data.timestamps, data.dates);
+    }
+
     // Add project markers to all charts
     if (data.project_markers) {
         addProjectMarkersToCharts(data.project_markers, data.timestamps);
@@ -275,8 +281,11 @@ function addProjectMarkersToCharts(markers, timestamps) {
             chart.options.plugins.annotation = { annotations: {} };
         }
 
-        // Clear existing project markers
-        chart.options.plugins.annotation.annotations = {};
+        // Clear existing project markers but preserve date-separator annotations
+        const allAnnotations = chart.options.plugins.annotation.annotations;
+        Object.keys(allAnnotations).forEach(key => {
+            if (!key.startsWith('dateSep_')) delete allAnnotations[key];
+        });
 
         // Track active tooltip
         let activeMarkerTooltip = null;

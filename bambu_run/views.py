@@ -54,6 +54,9 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
             "timestamps": [
                 m.timestamp.astimezone(tz).strftime("%H:%M") for m in metrics
             ],
+            "dates": [
+                m.timestamp.astimezone(tz).strftime("%Y-%m-%d") for m in metrics
+            ],
             "nozzle_temp": [
                 float(m.nozzle_temp) if m.nozzle_temp else None for m in metrics
             ],
@@ -266,6 +269,7 @@ class PrinterDataAPIView(LoginRequiredMixin, View):
             data = {
                 "timestamps": [m.timestamp.astimezone(tz).strftime('%H:%M') for m in metrics],
                 "timestamps_iso": [m.timestamp.astimezone(tz).isoformat() for m in metrics],
+                "dates": [m.timestamp.astimezone(tz).strftime('%Y-%m-%d') for m in metrics],
                 "nozzle_temp": [float(m.nozzle_temp) if m.nozzle_temp else None for m in metrics],
                 "nozzle_target_temp": [float(m.nozzle_target_temp) if m.nozzle_target_temp else None for m in metrics],
                 "bed_temp": [float(m.bed_temp) if m.bed_temp else None for m in metrics],
@@ -410,15 +414,32 @@ class FilamentUsageDataAPIView(LoginRequiredMixin, View):
                 end_dt = end_dt_naive.replace(tzinfo=tz)
                 query = query.filter(printer_metric__timestamp__lte=end_dt)
 
+            fallback_used = False
             if not start_date and not end_date:
                 time_24h_ago = timezone.now() - timedelta(hours=24)
-                query = query.filter(printer_metric__timestamp__gte=time_24h_ago)
-
-            snapshots = query.order_by('printer_metric__timestamp')
+                default_query = query.filter(printer_metric__timestamp__gte=time_24h_ago)
+                if default_query.exists():
+                    snapshots = default_query.order_by('printer_metric__timestamp')
+                else:
+                    # Fallback: show 24h window ending at the most recent available snapshot
+                    last_snapshot = query.order_by('-printer_metric__timestamp').first()
+                    if last_snapshot:
+                        last_ts = last_snapshot.printer_metric.timestamp
+                        fallback_start = last_ts - timedelta(hours=24)
+                        snapshots = query.filter(
+                            printer_metric__timestamp__gte=fallback_start,
+                            printer_metric__timestamp__lte=last_ts
+                        ).order_by('printer_metric__timestamp')
+                        fallback_used = True
+                    else:
+                        snapshots = query.none()
+            else:
+                snapshots = query.order_by('printer_metric__timestamp')
 
             data = {
                 "timestamps": [s.printer_metric.timestamp.astimezone(tz).strftime('%Y-%m-%d %H:%M') for s in snapshots],
-                "remaining": [s.remain_percent for s in snapshots]
+                "remaining": [s.remain_percent for s in snapshots],
+                "fallback_used": fallback_used,
             }
 
             return JsonResponse(data)
