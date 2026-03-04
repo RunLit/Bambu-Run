@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import timedelta, datetime
 from django.views.generic import TemplateView, View, ListView, CreateView, UpdateView, DetailView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils import timezone
@@ -12,6 +12,19 @@ import zoneinfo
 from .conf import app_settings
 from .models import Printer, PrinterMetrics, Filament, FilamentColor, FilamentType, FilamentSnapshot, PrintJob, FilamentUsage
 from .forms import FilamentForm, FilamentColorForm, FilamentTypeForm
+
+_METRICS_API_FIELDS = [
+    'id', 'device_id', 'timestamp',
+    'nozzle_temp', 'nozzle_target_temp',
+    'bed_temp', 'bed_target_temp',
+    'print_percent', 'cooling_fan_speed', 'heatbreak_fan_speed',
+    'wifi_signal_dbm', 'ams_humidity_raw', 'ams_temp',
+    'layer_num', 'total_layer_num',
+    'gcode_state', 'print_type', 'subtask_name',
+    'external_spool',
+]
+_MAX_CHART_POINTS = 3000
+_FILAMENT_TIMELINE_MAX_STEP = 10  # disable filament timeline for ranges > ~10 days
 
 
 class PrinterDashboardView(LoginRequiredMixin, TemplateView):
@@ -248,50 +261,176 @@ class PrinterDataAPIView(LoginRequiredMixin, View):
             if not printer_device:
                 return JsonResponse({"error": "No printer device found"}, status=404)
 
-            query = PrinterMetrics.objects.filter(device=printer_device).prefetch_related('filament_snapshots')
-
             tz = zoneinfo.ZoneInfo(app_settings.TIMEZONE)
 
-            if start_date and start_time:
-                from datetime import datetime
-                start_dt_naive = datetime.strptime(f"{start_date} {start_time}", "%Y-%m-%d %H:%M")
-                start_dt = start_dt_naive.replace(tzinfo=tz)
+            # Stage A: only() + step calculation
+            query = (
+                PrinterMetrics.objects
+                .filter(device=printer_device)
+                .only(*_METRICS_API_FIELDS)
+            )
+
+            if start_date and start_time and end_date and end_time:
+                start_dt = datetime.strptime(f"{start_date} {start_time}", "%Y-%m-%d %H:%M").replace(tzinfo=tz)
+                end_dt = datetime.strptime(f"{end_date} {end_time}", "%Y-%m-%d %H:%M").replace(tzinfo=tz)
+                query = query.filter(timestamp__gte=start_dt, timestamp__lte=end_dt)
+                range_seconds = (end_dt - start_dt).total_seconds()
+                expected_count = max(1, int(range_seconds / 30))
+            elif start_date and start_time:
+                start_dt = datetime.strptime(f"{start_date} {start_time}", "%Y-%m-%d %H:%M").replace(tzinfo=tz)
                 query = query.filter(timestamp__gte=start_dt)
-
-            if end_date and end_time:
-                from datetime import datetime
-                end_dt_naive = datetime.strptime(f"{end_date} {end_time}", "%Y-%m-%d %H:%M")
-                end_dt = end_dt_naive.replace(tzinfo=tz)
+                expected_count = _MAX_CHART_POINTS
+            elif end_date and end_time:
+                end_dt = datetime.strptime(f"{end_date} {end_time}", "%Y-%m-%d %H:%M").replace(tzinfo=tz)
                 query = query.filter(timestamp__lte=end_dt)
+                expected_count = _MAX_CHART_POINTS
+            else:
+                expected_count = _MAX_CHART_POINTS
 
-            metrics = query.order_by("timestamp")
+            step = max(1, expected_count // _MAX_CHART_POINTS)
+
+            # Stage B: single DB round-trip, downsample in Python
+            metrics_list = list(query.order_by("timestamp"))
+            if step > 1:
+                metrics_list = metrics_list[::step]
+
+            total_points = len(metrics_list)
+
+            # Stage C: targeted snapshot fetch (only sampled IDs)
+            include_filament = (step <= _FILAMENT_TIMELINE_MAX_STEP)
+            snapshots_by_metric: dict = {}
+            if include_filament and metrics_list:
+                sampled_ids = [m.id for m in metrics_list]
+                for snap in FilamentSnapshot.objects.filter(printer_metric_id__in=sampled_ids):
+                    snapshots_by_metric.setdefault(snap.printer_metric_id, []).append(snap)
+
+            # Stage D: single-pass serialization
+            timestamps = []
+            timestamps_iso = []
+            dates = []
+            nozzle_temp = []
+            nozzle_target_temp = []
+            bed_temp = []
+            bed_target_temp = []
+            print_percent = []
+            cooling_fan_speed = []
+            heatbreak_fan_speed = []
+            wifi_signal_dbm = []
+            ams_humidity_raw = []
+            ams_temp = []
+            layer_num = []
+            total_layer_num = []
+            gcode_state = []
+            print_type = []
+            subtask_name = []
+
+            project_markers = []
+            current_job = None
+            last_state = None
+
+            filament_data = {}
+
+            for idx, m in enumerate(metrics_list):
+                ts = m.timestamp.astimezone(tz)
+                timestamps.append(ts.strftime('%H:%M'))
+                timestamps_iso.append(ts.isoformat())
+                dates.append(ts.strftime('%Y-%m-%d'))
+                nozzle_temp.append(float(m.nozzle_temp) if m.nozzle_temp else None)
+                nozzle_target_temp.append(float(m.nozzle_target_temp) if m.nozzle_target_temp else None)
+                bed_temp.append(float(m.bed_temp) if m.bed_temp else None)
+                bed_target_temp.append(float(m.bed_target_temp) if m.bed_target_temp else None)
+                print_percent.append(m.print_percent if m.print_percent else 0)
+                cooling_fan_speed.append(m.cooling_fan_speed if m.cooling_fan_speed else 0)
+                heatbreak_fan_speed.append(m.heatbreak_fan_speed if m.heatbreak_fan_speed else 0)
+                wifi_signal_dbm.append(m.wifi_signal_dbm if m.wifi_signal_dbm else None)
+                ams_humidity_raw.append(m.ams_humidity_raw if m.ams_humidity_raw else None)
+                ams_temp.append(float(m.ams_temp) if m.ams_temp else None)
+                layer_num.append(m.layer_num if m.layer_num else 0)
+                total_layer_num.append(m.total_layer_num if m.total_layer_num else 0)
+                gcode_state.append(m.gcode_state)
+                print_type.append(m.print_type)
+                subtask_name.append(m.subtask_name)
+
+                # Project marker detection (inline)
+                subtask = m.subtask_name
+                gs = m.gcode_state
+                is_printing = gs not in ['FINISH', 'IDLE', None, '']
+                if subtask and subtask != current_job and is_printing:
+                    project_markers.append({
+                        'type': 'start',
+                        'index': idx,
+                        'timestamp': ts.isoformat(),
+                        'project_name': subtask,
+                    })
+                    current_job = subtask
+                    last_state = gs
+                elif current_job and last_state and last_state not in ['FINISH', 'IDLE'] and gs in ['FINISH', 'IDLE']:
+                    project_markers.append({
+                        'type': 'end',
+                        'index': idx,
+                        'timestamp': ts.isoformat(),
+                        'project_name': current_job,
+                    })
+                    current_job = None
+                last_state = gs
+
+                # Filament timeline (inline, only when include_filament)
+                if include_filament:
+                    for snap in snapshots_by_metric.get(m.id, []):
+                        tray_id = snap.tray_id
+                        fil_type = snap.type or 'Unknown'
+                        fil_sub_type = snap.sub_type or 'Unknown'
+                        fil_color = snap.color or 'FFFFFFFF'
+                        unique_key = f"{tray_id}_{fil_type}_{fil_sub_type}_{fil_color}"
+                        if unique_key not in filament_data:
+                            filament_data[unique_key] = {
+                                'tray_id': tray_id,
+                                'type': fil_type,
+                                'brand': fil_sub_type,
+                                'color': fil_color,
+                                'remain_data': [None] * total_points,
+                                'start_idx': idx,
+                            }
+                        filament_data[unique_key]['remain_data'][idx] = snap.remain_percent or 0
+
+                    external = m.external_spool or {}
+                    if external.get('type'):
+                        fil_type = external.get('type', 'Unknown')
+                        fil_color = external.get('color', '161616FF')
+                        unique_key = f"External_{fil_type}_{fil_color}"
+                        if unique_key not in filament_data:
+                            filament_data[unique_key] = {
+                                'tray_id': 'External',
+                                'type': fil_type,
+                                'brand': 'External',
+                                'color': fil_color,
+                                'remain_data': [None] * total_points,
+                                'start_idx': idx,
+                            }
+                        filament_data[unique_key]['remain_data'][idx] = external.get('remain', 0)
 
             data = {
-                "timestamps": [m.timestamp.astimezone(tz).strftime('%H:%M') for m in metrics],
-                "timestamps_iso": [m.timestamp.astimezone(tz).isoformat() for m in metrics],
-                "dates": [m.timestamp.astimezone(tz).strftime('%Y-%m-%d') for m in metrics],
-                "nozzle_temp": [float(m.nozzle_temp) if m.nozzle_temp else None for m in metrics],
-                "nozzle_target_temp": [float(m.nozzle_target_temp) if m.nozzle_target_temp else None for m in metrics],
-                "bed_temp": [float(m.bed_temp) if m.bed_temp else None for m in metrics],
-                "bed_target_temp": [float(m.bed_target_temp) if m.bed_target_temp else None for m in metrics],
-                "print_percent": [m.print_percent if m.print_percent else 0 for m in metrics],
-                "cooling_fan_speed": [m.cooling_fan_speed if m.cooling_fan_speed else 0 for m in metrics],
-                "heatbreak_fan_speed": [m.heatbreak_fan_speed if m.heatbreak_fan_speed else 0 for m in metrics],
-                "wifi_signal_dbm": [m.wifi_signal_dbm if m.wifi_signal_dbm else None for m in metrics],
-                "ams_humidity_raw": [m.ams_humidity_raw if m.ams_humidity_raw else None for m in metrics],
-                "ams_temp": [float(m.ams_temp) if m.ams_temp else None for m in metrics],
-                "layer_num": [m.layer_num if m.layer_num else 0 for m in metrics],
-                "total_layer_num": [m.total_layer_num if m.total_layer_num else 0 for m in metrics],
-                "gcode_state": [m.gcode_state for m in metrics],
-                "print_type": [m.print_type for m in metrics],
-                "subtask_name": [m.subtask_name for m in metrics],
+                "timestamps": timestamps,
+                "timestamps_iso": timestamps_iso,
+                "dates": dates,
+                "nozzle_temp": nozzle_temp,
+                "nozzle_target_temp": nozzle_target_temp,
+                "bed_temp": bed_temp,
+                "bed_target_temp": bed_target_temp,
+                "print_percent": print_percent,
+                "cooling_fan_speed": cooling_fan_speed,
+                "heatbreak_fan_speed": heatbreak_fan_speed,
+                "wifi_signal_dbm": wifi_signal_dbm,
+                "ams_humidity_raw": ams_humidity_raw,
+                "ams_temp": ams_temp,
+                "layer_num": layer_num,
+                "total_layer_num": total_layer_num,
+                "gcode_state": gcode_state,
+                "print_type": print_type,
+                "subtask_name": subtask_name,
+                "project_markers": project_markers,
+                "filament_timeline": filament_data,
             }
-
-            project_markers = self._calculate_project_markers(metrics, tz)
-            data["project_markers"] = project_markers
-
-            filament_timeline = self._prepare_filament_timeline_for_api(metrics)
-            data["filament_timeline"] = filament_timeline
 
             return JsonResponse(data)
 
@@ -299,93 +438,6 @@ class PrinterDataAPIView(LoginRequiredMixin, View):
             import traceback
             traceback.print_exc()
             return JsonResponse({"error": str(e)}, status=500)
-
-    def _calculate_project_markers(self, metrics, timezone_info):
-        markers = []
-        current_job = None
-        last_state = None
-
-        for idx, metric in enumerate(metrics):
-            subtask = metric.subtask_name
-            gcode_state = metric.gcode_state
-
-            is_printing = gcode_state not in ['FINISH', 'IDLE', None, '']
-
-            if subtask and subtask != current_job and is_printing:
-                markers.append({
-                    'type': 'start',
-                    'index': idx,
-                    'timestamp': metric.timestamp.astimezone(timezone_info).isoformat(),
-                    'project_name': subtask,
-                })
-                current_job = subtask
-                last_state = gcode_state
-
-            elif current_job and last_state and last_state not in ['FINISH', 'IDLE'] and gcode_state in ['FINISH', 'IDLE']:
-                markers.append({
-                    'type': 'end',
-                    'index': idx,
-                    'timestamp': metric.timestamp.astimezone(timezone_info).isoformat(),
-                    'project_name': current_job,
-                })
-                current_job = None
-
-            last_state = gcode_state
-
-        return markers
-
-    def _prepare_filament_timeline_for_api(self, metrics):
-        filament_data = {}
-        total_points = len(metrics)
-
-        for idx, metric in enumerate(metrics):
-            try:
-                snapshots = metric.filament_snapshots.all()
-            except Exception:
-                snapshots = []
-
-            for snapshot in snapshots:
-                tray_id = snapshot.tray_id
-                fil_type = snapshot.type or 'Unknown'
-                fil_sub_type = snapshot.sub_type or 'Unknown'
-                fil_color = snapshot.color or 'FFFFFFFF'
-
-                unique_key = f"{tray_id}_{fil_type}_{fil_sub_type}_{fil_color}"
-
-                if unique_key not in filament_data:
-                    filament_data[unique_key] = {
-                        'tray_id': tray_id,
-                        'type': fil_type,
-                        'brand': fil_sub_type,
-                        'color': fil_color,
-                        'remain_data': [None] * total_points,
-                        'start_idx': idx,
-                    }
-
-                remain_percent = snapshot.remain_percent or 0
-                filament_data[unique_key]['remain_data'][idx] = remain_percent
-
-        for idx, metric in enumerate(metrics):
-            external = metric.external_spool or {}
-            if external.get('type'):
-                fil_type = external.get('type', 'Unknown')
-                fil_color = external.get('color', '161616FF')
-                unique_key = f"External_{fil_type}_{fil_color}"
-
-                if unique_key not in filament_data:
-                    filament_data[unique_key] = {
-                        'tray_id': 'External',
-                        'type': fil_type,
-                        'brand': 'External',
-                        'color': fil_color,
-                        'remain_data': [None] * total_points,
-                        'start_idx': idx,
-                    }
-
-                remain_percent = external.get('remain', 0)
-                filament_data[unique_key]['remain_data'][idx] = remain_percent
-
-        return filament_data
 
 
 class FilamentUsageDataAPIView(LoginRequiredMixin, View):
