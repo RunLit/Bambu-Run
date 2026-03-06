@@ -24,7 +24,6 @@ _METRICS_API_FIELDS = [
     'external_spool',
 ]
 _MAX_CHART_POINTS = 3000
-_FILAMENT_TIMELINE_MAX_STEP = 10  # disable filament timeline for ranges > ~10 days
 
 
 class PrinterDashboardView(LoginRequiredMixin, TemplateView):
@@ -297,9 +296,8 @@ class PrinterDataAPIView(LoginRequiredMixin, View):
             total_points = len(metrics_list)
 
             # Stage C: targeted snapshot fetch (only sampled IDs)
-            include_filament = (step <= _FILAMENT_TIMELINE_MAX_STEP)
             snapshots_by_metric: dict = {}
-            if include_filament and metrics_list:
+            if metrics_list:
                 sampled_ids = [m.id for m in metrics_list]
                 for snap in FilamentSnapshot.objects.filter(printer_metric_id__in=sampled_ids):
                     snapshots_by_metric.setdefault(snap.printer_metric_id, []).append(snap)
@@ -374,40 +372,39 @@ class PrinterDataAPIView(LoginRequiredMixin, View):
                     current_job = None
                 last_state = gs
 
-                # Filament timeline (inline, only when include_filament)
-                if include_filament:
-                    for snap in snapshots_by_metric.get(m.id, []):
-                        tray_id = snap.tray_id
-                        fil_type = snap.type or 'Unknown'
-                        fil_sub_type = snap.sub_type or 'Unknown'
-                        fil_color = snap.color or 'FFFFFFFF'
-                        unique_key = f"{tray_id}_{fil_type}_{fil_sub_type}_{fil_color}"
-                        if unique_key not in filament_data:
-                            filament_data[unique_key] = {
-                                'tray_id': tray_id,
-                                'type': fil_type,
-                                'brand': fil_sub_type,
-                                'color': fil_color,
-                                'remain_data': [None] * total_points,
-                                'start_idx': idx,
-                            }
-                        filament_data[unique_key]['remain_data'][idx] = snap.remain_percent or 0
+                # Filament timeline (inline)
+                for snap in snapshots_by_metric.get(m.id, []):
+                    tray_id = snap.tray_id
+                    fil_type = snap.type or 'Unknown'
+                    fil_sub_type = snap.sub_type or 'Unknown'
+                    fil_color = snap.color or 'FFFFFFFF'
+                    unique_key = f"{tray_id}_{fil_type}_{fil_sub_type}_{fil_color}"
+                    if unique_key not in filament_data:
+                        filament_data[unique_key] = {
+                            'tray_id': tray_id,
+                            'type': fil_type,
+                            'brand': fil_sub_type,
+                            'color': fil_color,
+                            'remain_data': [None] * total_points,
+                            'start_idx': idx,
+                        }
+                    filament_data[unique_key]['remain_data'][idx] = snap.remain_percent or 0
 
-                    external = m.external_spool or {}
-                    if external.get('type'):
-                        fil_type = external.get('type', 'Unknown')
-                        fil_color = external.get('color', '161616FF')
-                        unique_key = f"External_{fil_type}_{fil_color}"
-                        if unique_key not in filament_data:
-                            filament_data[unique_key] = {
-                                'tray_id': 'External',
-                                'type': fil_type,
-                                'brand': 'External',
-                                'color': fil_color,
-                                'remain_data': [None] * total_points,
-                                'start_idx': idx,
-                            }
-                        filament_data[unique_key]['remain_data'][idx] = external.get('remain', 0)
+                external = m.external_spool or {}
+                if external.get('type'):
+                    fil_type = external.get('type', 'Unknown')
+                    fil_color = external.get('color', '161616FF')
+                    unique_key = f"External_{fil_type}_{fil_color}"
+                    if unique_key not in filament_data:
+                        filament_data[unique_key] = {
+                            'tray_id': 'External',
+                            'type': fil_type,
+                            'brand': 'External',
+                            'color': fil_color,
+                            'remain_data': [None] * total_points,
+                            'start_idx': idx,
+                        }
+                    filament_data[unique_key]['remain_data'][idx] = external.get('remain', 0)
 
             data = {
                 "timestamps": timestamps,
