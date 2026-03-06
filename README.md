@@ -128,6 +128,24 @@ rm ~/.config/systemd/user/bambu-run-{web,collector}.service
 systemctl --user daemon-reload
 ```
 
+**Wipe everything and start over:**
+```bash
+# Stop and remove services
+systemctl --user stop bambu-run-web bambu-run-collector
+systemctl --user disable bambu-run-web bambu-run-collector
+rm ~/.config/systemd/user/bambu-run-{web,collector}.service
+systemctl --user daemon-reload
+
+# Delete repo — wipes venv, database, and .env
+cd ~
+rm -rf ~/Bambu-Run
+
+# Re-clone and run setup from scratch
+git clone https://github.com/RunLit/Bambu-Run.git
+cd Bambu-Run
+bash setup.sh
+```
+
 ---
 
 ## Docker Setup
