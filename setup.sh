@@ -90,8 +90,15 @@ if [ ! -f "$ENV_FILE" ]; then
     read -rp "Bambu Lab email: " BAMBU_USERNAME
     read -rsp "Bambu Lab password: " BAMBU_PASSWORD
     echo
-    read -rp "Timezone [UTC] (e.g. America/New_York): " TIMEZONE
-    TIMEZONE="${TIMEZONE:-UTC}"
+    while true; do
+        read -rp "Timezone [UTC] (e.g. America/Sydney): " TIMEZONE
+        TIMEZONE="${TIMEZONE:-UTC}"
+        if "$VENV_DIR/bin/python" -c "import zoneinfo; zoneinfo.ZoneInfo('$TIMEZONE')" 2>/dev/null; then
+            break
+        else
+            red "Unknown timezone '$TIMEZONE'. Find yours at: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones"
+        fi
+    done
 
     # Generate a random Django secret key
     DJANGO_SECRET_KEY=$("$VENV_DIR/bin/python" -c "import secrets; print(secrets.token_urlsafe(50))")
