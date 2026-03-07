@@ -103,7 +103,7 @@ systemctl --user disable bambu-run-web bambu-run-collector
 rm ~/.config/systemd/user/bambu-run-{web,collector}.service
 systemctl --user daemon-reload
 
-# Remove port 80 redirect (if it was set)
+# Remove port redirect (replace 80 with whatever port you chose during setup)
 sudo iptables -t nat -D PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8000 2>/dev/null || true
 sudo iptables -t nat -D OUTPUT -o lo -p tcp --dport 80 -j REDIRECT --to-port 8000 2>/dev/null || true
 sudo netfilter-persistent save 2>/dev/null || true
