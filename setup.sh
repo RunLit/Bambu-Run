@@ -220,6 +220,11 @@ else
         yellow "Port $ACCESS_PORT → 8000 redirect already set."
         PORT_OK=true
     else
+        # Ensure iptables is available
+        if ! command -v iptables &>/dev/null; then
+            yellow "Installing iptables..."
+            DEBIAN_FRONTEND=noninteractive sudo apt-get install -y -qq iptables
+        fi
         if sudo iptables -t nat -A PREROUTING -p tcp --dport "$ACCESS_PORT" -j REDIRECT --to-port 8000 && \
            sudo iptables -t nat -A OUTPUT -o lo -p tcp --dport "$ACCESS_PORT" -j REDIRECT --to-port 8000; then
             green "Port $ACCESS_PORT → 8000 redirect configured."
