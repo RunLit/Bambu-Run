@@ -18,6 +18,14 @@ red()    { printf '\033[1;31m%s\033[0m\n' "$*"; }
 green "=== Bambu-Run Native Setup ==="
 echo
 
+# Acquire sudo upfront and keep it alive for the duration of the script
+echo "This script needs sudo for iptables (port redirect) and apt (dependencies)."
+sudo -v
+while true; do sudo -n true; sleep 50; kill -0 "$$" || exit; done 2>/dev/null &
+SUDO_KEEPALIVE_PID=$!
+trap 'kill "$SUDO_KEEPALIVE_PID" 2>/dev/null' EXIT
+echo
+
 # Python >= 3.10
 PYTHON=""
 for cmd in python3.12 python3.11 python3.10 python3; do
@@ -55,7 +63,7 @@ fi
 
 # Prompt for access port
 while true; do
-    read -rp "Access port [80]: " ACCESS_PORT
+    read -rp "Choose Bambu-Run Dashboard access port (Default: 80): " ACCESS_PORT
     ACCESS_PORT="${ACCESS_PORT:-80}"
     if [[ "$ACCESS_PORT" =~ ^[0-9]+$ ]] && [ "$ACCESS_PORT" -ge 1 ] && [ "$ACCESS_PORT" -le 65535 ]; then
         break
@@ -157,8 +165,12 @@ fi
 # ── 6. Superuser ─────────────────────────────────────────────────────────────
 
 echo
-green "Create your dashboard login (Django superuser):"
-$MANAGE createsuperuser || yellow "Superuser creation skipped."
+if $MANAGE shell -c "from django.contrib.auth import get_user_model; exit(0 if get_user_model().objects.filter(is_superuser=True).exists() else 1)" 2>/dev/null; then
+    yellow "Superuser already exists, skipping. (To add another, run: python standalone/manage.py createsuperuser)"
+else
+    green "Create your dashboard login (Django superuser):"
+    $MANAGE createsuperuser || yellow "Superuser creation skipped."
+fi
 
 # ── 7. Collect static files ──────────────────────────────────────────────────
 
