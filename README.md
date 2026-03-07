@@ -24,11 +24,7 @@ It runs quietly in the background 24/7, capturing every print, filament change, 
 
 - [Native Setup (Recommended for Raspberry Pi)](#native-setup-recommended-for-raspberry-pi)
   - [What You'll Need](#what-youll-need)
-  - [Step 1: Clone and run setup.sh](#step-1-clone-and-run-setupsh)
-  - [Step 2: Credentials and .env](#step-2-credentials-and-env)
-  - [Step 3: Bambu Cloud authentication](#step-3-bambu-cloud-authentication)
-  - [Step 4: Dashboard login](#step-4-dashboard-login)
-  - [Step 5: Services start automatically](#step-5-services-start-automatically)
+  - [Clone and run setup.sh](#clone-and-run-setupsh)
   - [Managing Bambu-Run](#managing-bambu-run)
   - [Troubleshooting (Native)](#troubleshooting-native)
 - [Docker Setup](#docker-setup)
@@ -42,11 +38,11 @@ No Docker required. Works on any Raspberry Pi (including 32-bit Pi Model B) runn
 
 ### What You'll Need
 
-- Raspberry Pi on your local network (Python 3.10+ — ships with Raspberry Pi OS Bookworm by default)
-- Bambu Lab printer on the **same local network**
+- Raspberry Pi on your local network (Python 3.10+)
+- Bambu Lab printer
 - Bambu Lab account **email and password**
 
-### Step 1: Clone and run setup.sh
+### Clone and run setup.sh
 
 ```bash
 git clone https://github.com/RunLit/Bambu-Run.git
@@ -54,57 +50,28 @@ cd Bambu-Run
 bash setup.sh
 ```
 
-The script is fully interactive and idempotent (safe to re-run). It:
+That's it! The script handles everything interactively, just answer the prompts. When it finishes, open `http://<ip>` from any device on same network.
 
-1. Checks Python >= 3.10 and installs `python3-venv` if missing
-2. Creates `.venv`, stubs opencv to avoid slow ARM compilation, and runs `pip install ".[standalone]"`
-3. Prompts for credentials and auto-generates `DJANGO_SECRET_KEY` — writes `.env`
-4. Runs `manage.py migrate`
-5. Runs `bambu_collector --once` for Bambu Cloud email verification (see Step 3)
-6. Runs `manage.py createsuperuser` for your dashboard login
-7. Runs `collectstatic`
-8. Optionally imports the bundled Bambu filament color catalog
-9. Writes and enables `systemd` user services, calls `loginctl enable-linger` so they survive SSH disconnect, and starts them
+The script is safe to re-run at any time.
 
-### Step 2: Credentials and .env
+---
 
-If `.env` doesn't exist, the script prompts for:
+**What the script does**:
 
-| Variable | Description |
-|---|---|
-| `BAMBU_USERNAME` | Bambu Lab account email |
-| `BAMBU_PASSWORD` | Bambu Lab account password |
-| `TIMEZONE` | e.g. `America/New_York` (default: `UTC`) |
+- **Dependencies**: creates a Python virtual environment, installs all packages
+- **Credentials**: prompts for your **BambuLab Cloud account** email, password, and timezone; auto-generates a `DJANGO_SECRET_KEY`; writes `.env`
+- **Bambu Cloud auth**: runs `bambu_collector --once`; 
+  - Bambu Lab will send a 6-digit code to your email; check you email box and enter it when prompted; 
+  - the resulting token is saved to `.env` automatically; future restarts skip this step
+- **Dashboard login**: runs `createsuperuser`; choose a username and password for Bambu-Run web UI log in
+- **Services**: installs and starts two systemd services (`bambu-run-web` and `bambu-run-collector`), enables linger so they auto-start on boot
+- **Port 80**: sets an `iptables` redirect (80 to 8000) so you can reach the dashboard at a plain `http://<pi-ip>` with no port number; persisted via `iptables-persistent` across reboots. 
 
-`DJANGO_SECRET_KEY` is auto-generated. To edit later: `nano .env`, then `./native/bambu-run.sh restart`.
-
-### Step 3: Bambu Cloud authentication
-
-Bambu Lab requires email verification on first login:
-
-1. The script runs `bambu_collector --once` — a 6-digit code is sent to your email
-2. Enter the code when prompted
-3. A `BAMBU_TOKEN` is printed — paste it when the script asks, and it's appended to `.env`
-
-Future restarts skip verification automatically. To re-authenticate, remove `BAMBU_TOKEN` from `.env` and re-run the script.
-
-### Step 4: Dashboard login
-
-The script runs `manage.py createsuperuser` — choose a username and password for the web dashboard.
-
-### Step 5: Services start automatically
-
-Two systemd user services are installed and started:
-
-| Service | Role |
-|---|---|
-| `bambu-run-web` | gunicorn on port 8000 (1 worker <1 GB RAM, 2 workers otherwise) |
-| `bambu-run-collector` | MQTT poller, restarts on failure |
-
-Both auto-start on boot via `loginctl enable-linger`. Open `http://<pi-ip>:8000` from any device on your network.
+---
 
 ### Managing Bambu-Run
 
+All commands manage Bambu-Run encapsulated in `./native/bambu-run.sh`. Alternatively, you can do it yourself with systemctl commands.
 ```bash
 ./native/bambu-run.sh status    # service status
 ./native/bambu-run.sh logs      # tail live logs (Ctrl+C to stop)
@@ -135,6 +102,11 @@ systemctl --user stop bambu-run-web bambu-run-collector
 systemctl --user disable bambu-run-web bambu-run-collector
 rm ~/.config/systemd/user/bambu-run-{web,collector}.service
 systemctl --user daemon-reload
+
+# Remove port 80 redirect (if it was set)
+sudo iptables -t nat -D PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8000 2>/dev/null || true
+sudo iptables -t nat -D OUTPUT -o lo -p tcp --dport 80 -j REDIRECT --to-port 8000 2>/dev/null || true
+sudo netfilter-persistent save 2>/dev/null || true
 
 # Delete repo — wipes venv, database, and .env
 cd ~

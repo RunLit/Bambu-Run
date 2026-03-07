@@ -184,15 +184,42 @@ loginctl enable-linger "$USER" 2>/dev/null || \
 
 systemctl --user start bambu-run-web.service bambu-run-collector.service
 
-# ── 10. Summary ───────────────────────────────────────────────────────────────
+# ── 10. Port 80 redirect (so http://<ip> works without :8000) ────────────────
+
+PORT80_OK=false
+if sudo iptables -t nat -C PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8000 2>/dev/null; then
+    yellow "Port 80 → 8000 redirect already set."
+    PORT80_OK=true
+else
+    if sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8000 && \
+       sudo iptables -t nat -A OUTPUT -o lo -p tcp --dport 80 -j REDIRECT --to-port 8000; then
+        green "Port 80 → 8000 redirect configured."
+        PORT80_OK=true
+        # Persist so it survives reboot
+        if ! command -v netfilter-persistent &>/dev/null; then
+            yellow "Installing iptables-persistent to survive reboots..."
+            DEBIAN_FRONTEND=noninteractive sudo apt-get install -y -qq iptables-persistent
+        fi
+        sudo netfilter-persistent save 2>/dev/null || sudo sh -c 'iptables-save > /etc/iptables/rules.v4'
+    else
+        yellow "Warning: Could not set port 80 redirect (sudo required). Access via http://<ip>:8000"
+    fi
+fi
+
+# ── 11. Summary ───────────────────────────────────────────────────────────────
 
 PI_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+if [ "$PORT80_OK" = true ]; then
+    DASHBOARD_URL="http://${PI_IP:-localhost}"
+else
+    DASHBOARD_URL="http://${PI_IP:-localhost}:8000"
+fi
 echo
 green "============================================"
 green "  Bambu-Run is running!"
 green "============================================"
 echo
-echo "  Dashboard:  http://${PI_IP:-localhost}:8000"
+echo "  Dashboard:  $DASHBOARD_URL"
 echo "  Status:     systemctl --user status bambu-run-web bambu-run-collector"
 echo "  Logs:       journalctl --user -u bambu-run-web -u bambu-run-collector -f"
 echo "  Helper:     ./native/bambu-run.sh {start|stop|restart|status|logs|update}"
