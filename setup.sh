@@ -53,6 +53,18 @@ else
     WORKERS=2
 fi
 
+# Prompt for access port
+while true; do
+    read -rp "Access port [80]: " ACCESS_PORT
+    ACCESS_PORT="${ACCESS_PORT:-80}"
+    if [[ "$ACCESS_PORT" =~ ^[0-9]+$ ]] && [ "$ACCESS_PORT" -ge 1 ] && [ "$ACCESS_PORT" -le 65535 ]; then
+        break
+    else
+        red "Invalid port '$ACCESS_PORT'. Please enter a number between 1 and 65535."
+    fi
+done
+green "Dashboard will be accessible on port $ACCESS_PORT."
+
 # ── 2. Venv + install ────────────────────────────────────────────────────────
 
 if [ ! -d "$VENV_DIR" ]; then
@@ -184,33 +196,39 @@ loginctl enable-linger "$USER" 2>/dev/null || \
 
 systemctl --user start bambu-run-web.service bambu-run-collector.service
 
-# ── 10. Port 80 redirect (so http://<ip> works without :8000) ────────────────
+# ── 10. Port redirect (ACCESS_PORT → 8000 via iptables if needed) ────────────
 
-PORT80_OK=false
-if sudo iptables -t nat -C PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8000 2>/dev/null; then
-    yellow "Port 80 → 8000 redirect already set."
-    PORT80_OK=true
+PORT_OK=false
+if [ "$ACCESS_PORT" -eq 8000 ]; then
+    # Gunicorn already on 8000 — no redirect needed
+    green "Using port 8000 directly (no redirect needed)."
+    PORT_OK=true
 else
-    if sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8000 && \
-       sudo iptables -t nat -A OUTPUT -o lo -p tcp --dport 80 -j REDIRECT --to-port 8000; then
-        green "Port 80 → 8000 redirect configured."
-        PORT80_OK=true
-        # Persist so it survives reboot
-        if ! command -v netfilter-persistent &>/dev/null; then
-            yellow "Installing iptables-persistent to survive reboots..."
-            DEBIAN_FRONTEND=noninteractive sudo apt-get install -y -qq iptables-persistent
-        fi
-        sudo netfilter-persistent save 2>/dev/null || sudo sh -c 'iptables-save > /etc/iptables/rules.v4'
+    if sudo iptables -t nat -C PREROUTING -p tcp --dport "$ACCESS_PORT" -j REDIRECT --to-port 8000 2>/dev/null; then
+        yellow "Port $ACCESS_PORT → 8000 redirect already set."
+        PORT_OK=true
     else
-        yellow "Warning: Could not set port 80 redirect (sudo required). Access via http://<ip>:8000"
+        if sudo iptables -t nat -A PREROUTING -p tcp --dport "$ACCESS_PORT" -j REDIRECT --to-port 8000 && \
+           sudo iptables -t nat -A OUTPUT -o lo -p tcp --dport "$ACCESS_PORT" -j REDIRECT --to-port 8000; then
+            green "Port $ACCESS_PORT → 8000 redirect configured."
+            PORT_OK=true
+            # Persist so it survives reboot
+            if ! command -v netfilter-persistent &>/dev/null; then
+                yellow "Installing iptables-persistent to survive reboots..."
+                DEBIAN_FRONTEND=noninteractive sudo apt-get install -y -qq iptables-persistent
+            fi
+            sudo netfilter-persistent save 2>/dev/null || sudo sh -c 'iptables-save > /etc/iptables/rules.v4'
+        else
+            yellow "Warning: Could not set port $ACCESS_PORT redirect (sudo required). Access via http://<ip>:8000"
+        fi
     fi
 fi
 
 # ── 11. Summary ───────────────────────────────────────────────────────────────
 
 PI_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
-if [ "$PORT80_OK" = true ]; then
-    DASHBOARD_URL="http://${PI_IP:-localhost}"
+if [ "$PORT_OK" = true ] && [ "$ACCESS_PORT" -ne 8000 ]; then
+    DASHBOARD_URL="http://${PI_IP:-localhost}$([ "$ACCESS_PORT" -eq 80 ] && echo '' || echo ":$ACCESS_PORT")"
 else
     DASHBOARD_URL="http://${PI_IP:-localhost}:8000"
 fi
