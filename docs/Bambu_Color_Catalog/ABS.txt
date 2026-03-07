@@ -22,3 +22,7 @@ Silver
 Hex:#87909A
 Black
 Hex:#000000
+Mint
+Hex:#7AE1BF
+Lavender
+Hex:#7248BD

@@ -1,0 +1,15 @@
+[Unit]
+Description=Bambu-Run Web Dashboard
+After=network.target
+
+[Service]
+Type=exec
+WorkingDirectory={{REPO_DIR}}
+EnvironmentFile={{REPO_DIR}}/.env
+Environment=DJANGO_SETTINGS_MODULE=standalone.settings
+ExecStart={{VENV_DIR}}/bin/gunicorn standalone.wsgi:application --bind 0.0.0.0:8000 --workers {{WORKERS}} --timeout 120
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

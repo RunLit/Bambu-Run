@@ -22,151 +22,144 @@ It runs quietly in the background 24/7, capturing every print, filament change, 
 
 ## Table of Contents
 
-- [Quick Start: One-Click Docker Setup — Beginner Friendly](#quick-start-one-click-docker-setup--beginner-friendly)
+- [Native Setup (Recommended for Raspberry Pi)](#native-setup-recommended-for-raspberry-pi)
   - [What You'll Need](#what-youll-need)
-  - [Step 1: Connect to Your Raspberry Pi](#step-1-connect-to-your-raspberry-pi)
-  - [Step 2: Install Docker](#step-2-install-docker)
-  - [Step 3: Download and Configure](#step-3-download-and-configure)
-  - [Step 4: Build the Container](#step-4-build-the-container)
-  - [Step 5: First-Time Authentication](#step-5-first-time-authentication)
-  - [Step 6: Start Bambu-Run and Create Your Login](#step-6-start-bambu-run-and-create-your-login)
-  - [Step 7: Open the Dashboard](#step-7-open-the-dashboard)
-  - [Troubleshooting](#troubleshooting)
+  - [Clone and run setup.sh](#clone-and-run-setupsh)
+  - [Managing Bambu-Run](#managing-bambu-run)
+  - [Troubleshooting (Native)](#troubleshooting-native)
+- [Docker Setup](#docker-setup)
 - [Batch Importing Filament Colors and Filament Types](#batch-importing-filament-colors-and-filament-types)
 
 ---
 
-## Quick Start: One-Click Docker Setup — Beginner Friendly
+## Native Setup (Recommended for Raspberry Pi)
 
-Get Bambu-Run running on a **Raspberry Pi** in minutes. No prior server experience needed.
+No Docker required. Works on any Raspberry Pi (including 32-bit Pi Model B) running Raspberry Pi OS with Python 3.10+.
 
 ### What You'll Need
 
-- A Raspberry Pi (3B+, 4, or 5) running Raspberry Pi OS 64-bit, with a 32 GB+ MicroSD card, connected to your network
-- Your Bambu Lab printer on the **same local network**
-- Your Bambu Lab account **email and password**
-- A computer to SSH into the Pi
+- Raspberry Pi on your local network (Python 3.10+)
+- Bambu Lab printer
+- Bambu Lab account **email and password**
 
-### Step 1: Connect to Your Raspberry Pi
-
-From your computer, open a terminal (Mac/Linux) or PowerShell (Windows):
+### Clone and run setup.sh
 
 ```bash
-ssh pi@raspberrypi.local
+git clone https://github.com/RunLit/Bambu-Run.git
+cd Bambu-Run
+bash setup.sh
 ```
 
-> Can't connect? Use your Pi's IP address (find it in your router's admin page). Default password: `raspberry`
+That's it! The script handles everything interactively, just answer the prompts. When it finishes, open `http://<ip>` from any device on same network.
 
-### Step 2: Install Docker
+The script is safe to re-run at any time.
 
+---
+
+**What the script does**:
+
+- **Dependencies**: creates a Python virtual environment, installs all packages
+- **Credentials**: prompts for your **BambuLab Cloud account** email, password, and timezone; auto-generates a `DJANGO_SECRET_KEY`; writes `.env`
+- **Bambu Cloud auth**: runs `bambu_collector --once`; 
+  - Bambu Lab will send a 6-digit code to your email; check you email box and enter it when prompted; 
+  - the resulting token is saved to `.env` automatically; future restarts skip this step
+- **Dashboard login**: runs `createsuperuser`; choose a username and password for Bambu-Run web UI log in
+- **Services**: installs and starts two systemd services (`bambu-run-web` and `bambu-run-collector`), enables linger so they auto-start on boot
+- **Port 80**: sets an `iptables` redirect (80 to 8000) so you can reach the dashboard at a plain `http://<pi-ip>` with no port number; persisted via `iptables-persistent` across reboots. 
+
+---
+
+### Managing Bambu-Run
+
+All commands manage Bambu-Run encapsulated in `./native/bambu-run.sh`. Alternatively, you can do it yourself with systemctl commands.
 ```bash
-curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker $USER
+./native/bambu-run.sh status    # service status
+./native/bambu-run.sh logs      # tail live logs (Ctrl+C to stop)
+./native/bambu-run.sh restart   # restart both services
+./native/bambu-run.sh stop      # stop everything
+./native/bambu-run.sh update    # git pull + pip install + migrate + restart
 ```
 
-Log out and back in for the change to take effect, then verify:
+### Troubleshooting (Native)
 
+**Services die when SSH disconnects:** `sudo loginctl enable-linger $USER`
+
+**Services not starting:** `./native/bambu-run.sh status` and `./native/bambu-run.sh logs`
+
+**Auth errors / token expired:** Remove `BAMBU_TOKEN` from `.env` and re-run `bash setup.sh`
+
+**Uninstall:**
 ```bash
-exit
+systemctl --user disable --now bambu-run-web bambu-run-collector
+rm ~/.config/systemd/user/bambu-run-{web,collector}.service
+systemctl --user daemon-reload
 ```
 
+**Wipe everything and start over:**
 ```bash
-ssh pi@raspberrypi.local
-docker --version   # should show Docker version 27.x.x
+# Stop and remove services
+systemctl --user stop bambu-run-web bambu-run-collector
+systemctl --user disable bambu-run-web bambu-run-collector
+rm ~/.config/systemd/user/bambu-run-{web,collector}.service
+systemctl --user daemon-reload
+
+# Remove port redirect (replace 80 with whatever port you chose during setup)
+sudo iptables -t nat -D PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8000 2>/dev/null || true
+sudo iptables -t nat -D OUTPUT -o lo -p tcp --dport 80 -j REDIRECT --to-port 8000 2>/dev/null || true
+sudo netfilter-persistent save 2>/dev/null || true
+
+# Delete repo — wipes venv, database, and .env
+cd ~
+rm -rf ~/Bambu-Run
+
+# Re-clone and run setup from scratch
+git clone https://github.com/RunLit/Bambu-Run.git
+cd Bambu-Run
+bash setup.sh
 ```
 
-> Installation issues? See: https://docs.docker.com/engine/install/raspberry-pi-os/
+---
 
-### Step 3: Download and Configure
+## Docker Setup
+
+Requires Docker and Docker Compose installed. Assumes you already know how to get there.
+
+**Clone and configure:**
 
 ```bash
 git clone https://github.com/RunLit/Bambu-Run.git
 cd Bambu-Run
 cp .env.example .env
-nano .env
+# Edit .env: set BAMBU_USERNAME, BAMBU_PASSWORD, TIMEZONE
 ```
 
-Fill in your Bambu Lab credentials:
-
-```
-BAMBU_USERNAME=your_email@example.com
-BAMBU_PASSWORD=your_password
-TIMEZONE=Australia/Melbourne   # optional — find yours at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
-```
-
-Save: `Ctrl + X`, `Y`, `Enter`
-
-### Step 4: Build the Container
+**First-time auth** (Bambu Lab sends a 6-digit verification code to your email):
 
 ```bash
 docker compose build
-```
-
-This takes a few minutes the first time — it downloads all required software.
-
-### Step 5: First-Time Authentication
-
-Bambu Lab requires email verification on first login. Run these two commands:
-
-```bash
 docker compose run --rm bambu-run python standalone/manage.py migrate --noinput
 docker compose run --rm bambu-run python standalone/manage.py bambu_collector --once
+# Paste the printed token into .env as BAMBU_TOKEN=...
 ```
 
-When prompted, enter the 6-digit code sent to your email. On success you'll see a token printed — copy it and add it to your `.env`:
-
-```bash
-nano .env
-```
-
-```
-BAMBU_TOKEN=eyJhbGciOiJIUzI1N...paste_full_token_here
-```
-
-> Saving the token lets future restarts skip re-verification automatically.
-
-### Step 6: Start Bambu-Run and Create Your Login
+**Start and create your dashboard login:**
 
 ```bash
 docker compose up -d
 docker compose exec bambu-run python standalone/manage.py createsuperuser
 ```
 
-Choose a username and password — this is your dashboard login.
+Dashboard is at `http://<host-ip>:8000`.
 
-### Step 7: Open the Dashboard
+**Common operations:**
 
-On any device on your network, open a browser and go to:
-
-```
-http://raspberrypi.local:8000
-```
-
-> If that doesn't work, use your Pi's IP: `http://<pi-ip-address>:8000`
-
-Log in with the account you just created. Your printer dashboard should be live.
-
-### Troubleshooting
-
-**No data / cannot connect to printer:** Make sure the printer is on and on the same network. Check logs: `docker compose logs -f`. If you see auth errors, re-run Step 5 to get a fresh token.
-
-**401 Unauthorized / verification loop:** Remove `BAMBU_TOKEN` from `.env` and re-run Step 5.
-
-**Docker daemon error:** Log out and back in after Step 2 — the group change requires a new session.
-
-**Dashboard not loading:** Run `docker compose ps` to confirm the service is `Up`, then try the Pi's IP address directly.
-
-**Update Bambu-Run:**
 ```bash
-cd ~/Bambu-Run && git pull && docker compose up -d --build
+docker compose logs -f                          # live logs
+docker compose down                             # stop (data preserved in volume)
+git pull && docker compose up -d --build        # update
 ```
 
-**Stop Bambu-Run:**
-```bash
-docker compose down
-```
-
-Your data is preserved in a Docker volume and will be there when you start it again.
+**Troubleshooting:** Auth errors → remove `BAMBU_TOKEN` from `.env` and re-run the auth step. No data → check `docker compose logs -f` for MQTT connection errors.
 
 ---
 

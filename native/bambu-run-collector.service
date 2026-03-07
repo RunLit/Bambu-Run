@@ -1,0 +1,15 @@
+[Unit]
+Description=Bambu-Run MQTT Collector
+After=network.target
+
+[Service]
+Type=exec
+WorkingDirectory={{REPO_DIR}}
+EnvironmentFile={{REPO_DIR}}/.env
+Environment=DJANGO_SETTINGS_MODULE=standalone.settings
+ExecStart={{VENV_DIR}}/bin/python standalone/manage.py bambu_collector
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
