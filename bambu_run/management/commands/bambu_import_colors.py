@@ -371,6 +371,11 @@ class Command(BaseCommand):
                 return "created"
             return "no_type"
 
+        # ── Transparent detection ────────────────────────────────────────────
+        # "Translucent" (no colour qualifier) + #000000 = clear/transparent filament.
+        # Bambu Lab AMS reports these as 00000000 (alpha=00).
+        is_transparent = color_name.strip().lower() == "translucent" and hex_code == "000000"
+
         # ── Duplicate check ──────────────────────────────────────────────────
         # All five fields must match to be considered a duplicate:
         #   color_code (exact), color_name (case-insensitive), brand,
@@ -388,9 +393,10 @@ class Command(BaseCommand):
             return "duplicate"
 
         if dry_run:
+            transparent_note = "  [transparent]" if is_transparent else ""
             self.stdout.write(
                 f"  [dry-run] Would create: {color_name!r} #{hex_code}  "
-                f"({filament_type} / {filament_sub_type})"
+                f"({filament_type} / {filament_sub_type}){transparent_note}"
             )
             return "created"
 
@@ -404,6 +410,7 @@ class Command(BaseCommand):
                     filament_type=filament_type,
                     filament_sub_type=filament_sub_type,
                     brand=BRAND,
+                    is_transparent=is_transparent,
                 )
             self.stdout.write(
                 f"  + {color_name!r} #{hex_code}  ({filament_type} / {filament_sub_type})"

@@ -1,3 +1,4 @@
+Translucent	#000000
 Translucent Gray	#8E8E8E
 Translucent Light Blue	#61B0FF
 Translucent Olive	#748C45

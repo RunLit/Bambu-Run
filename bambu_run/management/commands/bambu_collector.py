@@ -316,7 +316,7 @@ class Command(BaseCommand):
 
     def _auto_create_filament(self, tray_data):
         from bambu_run.models import Filament, FilamentType
-        from bambu_run.utils import strip_color_padding, match_filament_color
+        from bambu_run.utils import strip_color_padding, match_filament_color, is_mqtt_color_transparent
 
         tray_uuid = tray_data.get('tray_uuid')
         tag_uid = tray_data.get('tag_uid')
@@ -329,6 +329,7 @@ class Command(BaseCommand):
 
         default_brand = app_settings.AUTO_CREATE_BRAND
 
+        transparent = is_mqtt_color_transparent(mqtt_color)
         color_code = strip_color_padding(mqtt_color)
         color_hex = f"#{color_code}" if color_code else None
 
@@ -341,6 +342,7 @@ class Command(BaseCommand):
 
         if filament_color:
             color_name = filament_color.color_name
+            transparent = transparent or filament_color.is_transparent
             if self.verbose:
                 logger.info(f"Matched color from database: {color_name} (#{color_code})")
         else:
@@ -368,6 +370,7 @@ class Command(BaseCommand):
             brand=default_brand,
             color=color_name,
             color_hex=color_hex,
+            is_transparent=transparent,
             diameter=diameter,
             initial_weight_grams=initial_weight,
             remaining_percent=remain_percent,

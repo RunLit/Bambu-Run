@@ -52,7 +52,7 @@ class FilamentForm(forms.ModelForm):
         model = Filament
         fields = [
             'tray_uuid', 'tag_uid', 'tag_id', 'created_by',
-            'filament_type', 'type', 'sub_type', 'brand', 'color', 'color_hex',
+            'filament_type', 'type', 'sub_type', 'brand', 'color', 'color_hex', 'is_transparent',
             'diameter', 'initial_weight_grams',
             'remaining_percent', 'remaining_weight_grams',
             'is_loaded_in_ams', 'current_tray_id',
@@ -71,10 +71,10 @@ class FilamentForm(forms.ModelForm):
             }),
             'tag_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Optional - User-defined ID'}),
             'created_by': forms.Select(attrs={'class': 'form-select'}),
-            'filament_type': forms.Select(attrs={'class': 'form-select'}),
-            'type': forms.HiddenInput(),
-            'sub_type': forms.HiddenInput(),
-            'brand': forms.HiddenInput(),
+            'filament_type': forms.Select(attrs={'class': 'form-select', 'id': 'id_filament_type'}),
+            'type': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., PLA, PETG, ABS'}),
+            'sub_type': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., PLA Basic (optional)'}),
+            'brand': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., Bambu Lab'}),
             'color': forms.Select(attrs={'class': 'form-select', 'id': 'id_color'}),
             'color_hex': forms.TextInput(attrs={
                 'class': 'form-control',
@@ -85,6 +85,7 @@ class FilamentForm(forms.ModelForm):
             'initial_weight_grams': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': '1000'}),
             'remaining_percent': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'max': '100'}),
             'remaining_weight_grams': forms.NumberInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
+            'is_transparent': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_is_transparent'}),
             'is_loaded_in_ams': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'current_tray_id': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'max': '3'}),
             'purchase_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),

@@ -54,11 +54,19 @@
                         {% for color in colors %}
                         <tr>
                             <td class="align-middle">
+                                {% if color.is_transparent %}
+                                <div style="width: 50px; height: 50px; border-radius: 4px; border: 2px solid #ddd; background: repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 0 0/10px 10px;" title="Clear / Transparent"></div>
+                                {% else %}
                                 <div style="width: 50px; height: 50px; background-color: {{ color.get_hex_color }}; border-radius: 4px; border: 2px solid #ddd;"></div>
+                                {% endif %}
                             </td>
                             <td class="align-middle"><strong>{{ color.color_name }}</strong></td>
                             <td class="align-middle">
+                                {% if color.is_transparent %}
+                                <span class="text-muted fst-italic">Clear / Transparent</span>
+                                {% else %}
                                 <span class="font-monospace">{{ color.get_hex_color }}</span>
+                                {% endif %}
                             </td>
                             <td class="align-middle">
                                 <span class="badge bg-secondary">{{ color.filament_type }}</span>
