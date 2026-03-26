@@ -51,5 +51,26 @@ class _Settings:
     def AUTO_CREATE_BRAND(self):
         return get_setting("BAMBU_RUN_AUTO_CREATE_BRAND", "Bambu Lab")
 
+    # MCP Server settings
+    @property
+    def MCP_API_KEY(self):
+        return get_setting("BAMBU_RUN_MCP_API_KEY", None)
+
+    @property
+    def MCP_HOST(self):
+        return get_setting("BAMBU_RUN_MCP_HOST", "0.0.0.0")
+
+    @property
+    def MCP_PORT(self):
+        return get_setting("BAMBU_RUN_MCP_PORT", 8808)
+
+    @property
+    def MCP_AUTH_BACKEND(self):
+        return get_setting("BAMBU_RUN_MCP_AUTH_BACKEND", None)
+
+    @property
+    def MCP_HIDE_SENSITIVE(self):
+        return get_setting("BAMBU_RUN_MCP_HIDE_SENSITIVE", False)
+
 
 app_settings = _Settings()

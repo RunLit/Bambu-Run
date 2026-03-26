@@ -3,6 +3,7 @@ services:
     build: .
     ports:
       - "8000:8000"
+      - "8808:8808"
     env_file: .env
     volumes:
       - bambu_data:/app/data

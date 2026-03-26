@@ -201,6 +201,25 @@ sed "s|{{REPO_DIR}}|$REPO_DIR|g; s|{{VENV_DIR}}|$VENV_DIR|g" \
 systemctl --user daemon-reload
 systemctl --user enable bambu-run-web.service bambu-run-collector.service
 
+# ── 9b. Optional MCP server ─────────────────────────────────────────────────
+
+echo
+MCP_ENABLED=false
+read -rp "Enable MCP server for AI agent access (Claude Desktop, Claude Code, etc.)? [y/N] " ENABLE_MCP
+if [[ "$ENABLE_MCP" =~ ^[Yy] ]]; then
+    green "Installing MCP dependencies..."
+    "$VENV_DIR/bin/pip" install --quiet ".[mcp]"
+
+    sed "s|{{REPO_DIR}}|$REPO_DIR|g; s|{{VENV_DIR}}|$VENV_DIR|g" \
+        "$REPO_DIR/native/bambu-run-mcp.service" > "$SERVICE_DIR/bambu-run-mcp.service"
+
+    systemctl --user daemon-reload
+    systemctl --user enable bambu-run-mcp.service
+    systemctl --user start bambu-run-mcp.service
+    MCP_ENABLED=true
+    green "MCP server enabled on port 8808."
+fi
+
 # Enable linger so services survive SSH logout
 loginctl enable-linger "$USER" 2>/dev/null || \
     sudo loginctl enable-linger "$USER" 2>/dev/null || \
@@ -255,9 +274,17 @@ green "  Bambu-Run is running!"
 green "============================================"
 echo
 echo "  Dashboard:  $DASHBOARD_URL"
+if [ "$MCP_ENABLED" = true ]; then
+    echo "  MCP Server: http://${PI_IP:-localhost}:8808/sse"
+fi
 echo "  Status:     systemctl --user status bambu-run-web bambu-run-collector"
 echo "  Logs:       journalctl --user -u bambu-run-web -u bambu-run-collector -f"
 echo "  Helper:     ./native/bambu-run.sh {start|stop|restart|status|logs|update}"
 echo
+if [ "$MCP_ENABLED" = true ]; then
+    echo "  Claude Desktop config:"
+    echo "    {\"mcpServers\":{\"bambu-run\":{\"url\":\"http://${PI_IP:-localhost}:8808/sse\"}}}"
+    echo
+fi
 echo "  Services auto-start on boot. Safe to close SSH."
 echo

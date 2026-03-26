@@ -8,6 +8,12 @@ VENV_DIR="$REPO_DIR/.venv"
 MANAGE="$VENV_DIR/bin/python $REPO_DIR/standalone/manage.py"
 SERVICES="bambu-run-web.service bambu-run-collector.service"
 
+# Include MCP service if installed
+SERVICE_DIR="$HOME/.config/systemd/user"
+if [ -f "$SERVICE_DIR/bambu-run-mcp.service" ]; then
+    SERVICES="$SERVICES bambu-run-mcp.service"
+fi
+
 case "${1:-help}" in
     start)
         systemctl --user start $SERVICES
@@ -25,14 +31,22 @@ case "${1:-help}" in
         systemctl --user status $SERVICES --no-pager
         ;;
     logs)
-        journalctl --user -u bambu-run-web -u bambu-run-collector -f --no-hostname
+        JOURNAL_UNITS="-u bambu-run-web -u bambu-run-collector"
+        if [ -f "$SERVICE_DIR/bambu-run-mcp.service" ]; then
+            JOURNAL_UNITS="$JOURNAL_UNITS -u bambu-run-mcp"
+        fi
+        journalctl --user $JOURNAL_UNITS -f --no-hostname
         ;;
     update)
         echo "Pulling latest code..."
         cd "$REPO_DIR" && git pull
 
         echo "Installing dependencies..."
-        "$VENV_DIR/bin/pip" install --quiet ".[standalone]"
+        EXTRAS="standalone"
+        if [ -f "$SERVICE_DIR/bambu-run-mcp.service" ]; then
+            EXTRAS="standalone,mcp"
+        fi
+        "$VENV_DIR/bin/pip" install --quiet ".[$EXTRAS]"
 
         echo "Running migrations..."
         $MANAGE migrate --noinput

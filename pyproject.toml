@@ -40,6 +40,9 @@ standalone = [
     "python-dotenv",
     "whitenoise",
 ]
+mcp = [
+    "mcp[cli]>=1.0",
+]
 dev = [
     "ruff",
     "pytest",
