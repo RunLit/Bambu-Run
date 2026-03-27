@@ -125,6 +125,7 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
                     if snapshot.filament:
                         filament_dict['color_name'] = snapshot.filament.color
                         filament_dict['filament_pk'] = snapshot.filament.pk
+                        filament_dict['is_transparent'] = snapshot.filament.is_transparent
                     filaments_list.append(filament_dict)
             except Exception:
                 filaments_list = []
@@ -544,6 +545,14 @@ class FilamentListView(LoginRequiredMixin, ListView):
         return context
 
 
+def _filament_type_map():
+    """Return a JSON-serialisable dict mapping FilamentType pk → {type, sub_type, brand}."""
+    return {
+        str(ft.pk): {'type': ft.type, 'sub_type': ft.sub_type or '', 'brand': ft.brand}
+        for ft in FilamentType.objects.all()
+    }
+
+
 class FilamentCreateView(LoginRequiredMixin, CreateView):
     model = Filament
     form_class = FilamentForm
@@ -553,6 +562,7 @@ class FilamentCreateView(LoginRequiredMixin, CreateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['bambu_run_base_template'] = app_settings.BASE_TEMPLATE
+        context['filament_type_map'] = json.dumps(_filament_type_map())
         return context
 
     def form_valid(self, form):
@@ -569,6 +579,7 @@ class FilamentUpdateView(LoginRequiredMixin, UpdateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['bambu_run_base_template'] = app_settings.BASE_TEMPLATE
+        context['filament_type_map'] = json.dumps(_filament_type_map())
         return context
 
     def form_valid(self, form):

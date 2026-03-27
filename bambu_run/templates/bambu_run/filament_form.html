@@ -44,6 +44,14 @@
                 <h5>Specifications</h5>
 
                 <div class="row mb-3">
+                    <div class="col-md-12">
+                        <label class="form-label">Filament Type Preset</label>
+                        {{ form.filament_type }}
+                        <small class="form-text text-muted">Selecting a preset auto-fills Type, Sub Type, and Brand below.</small>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
                     <div class="col-md-3">
                         <label class="form-label">Type *</label>
                         {{ form.type }}
@@ -62,12 +70,19 @@
                     </div>
                 </div>
 
-                <div class="row mb-3">
-                    <div class="col-md-3">
+                <div class="row mb-3 align-items-end">
+                    <div class="col-md-2">
                         <label class="form-label">Color Picker</label>
+                        <div id="transparent-swatch" style="display:none; width:100%; height:38px; border-radius:4px; border:1px solid #ddd; background: repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 0 0/10px 10px;" title="Clear / Transparent"></div>
                         {{ form.color_hex }}
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
+                        <div class="form-check mt-4">
+                            {{ form.is_transparent }}
+                            <label class="form-check-label" for="id_is_transparent">Transparent / Clear</label>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
                         <label class="form-label">{{ form.color_hex_text.label }}</label>
                         {{ form.color_hex_text }}
                         <small class="form-text text-muted">e.g. #0A2CA5</small>
@@ -209,95 +224,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-    // Sync color picker and text input
-    const colorPicker = document.getElementById('id_color_hex_picker');
-    const colorText = document.getElementById('id_color_hex_text');
-
-    if (colorPicker && colorText) {
-        colorPicker.addEventListener('input', function() {
-            colorText.value = this.value.toUpperCase();
-        });
-
-        colorText.addEventListener('input', function() {
-            const value = this.value.trim();
-            if (/^#[0-9A-Fa-f]{6}$/.test(value)) {
-                colorPicker.value = value;
-                this.classList.remove('is-invalid');
-            } else if (value.length === 7) {
-                this.classList.add('is-invalid');
-            }
-        });
-
-        if (colorText.value && /^#[0-9A-Fa-f]{6}$/.test(colorText.value)) {
-            colorPicker.value = colorText.value;
-        } else if (colorPicker.value && !colorText.value) {
-            colorText.value = colorPicker.value.toUpperCase();
-        }
-    }
-
-    // Delete confirmation logic
-    const deleteConfirmText = document.getElementById('deleteConfirmText');
-    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
-    const deleteForm = document.getElementById('deleteForm');
-    const deleteModal = document.getElementById('deleteModal');
-
-    if (deleteConfirmText && confirmDeleteBtn) {
-        deleteConfirmText.addEventListener('input', function() {
-            const value = this.value.trim();
-            if (value === 'DELETE') {
-                confirmDeleteBtn.disabled = false;
-                this.classList.remove('is-invalid');
-                this.classList.add('is-valid');
-            } else {
-                confirmDeleteBtn.disabled = true;
-                this.classList.remove('is-valid');
-                if (value.length > 0) {
-                    this.classList.add('is-invalid');
-                } else {
-                    this.classList.remove('is-invalid');
-                }
-            }
-        });
-
-        if (deleteForm) {
-            deleteForm.addEventListener('submit', function(e) {
-                if (confirmDeleteBtn.disabled) {
-                    e.preventDefault();
-                    alert('Please type DELETE to confirm deletion');
-                    return false;
-                }
-                return true;
-            });
-        }
-
-        if (deleteModal) {
-            deleteModal.addEventListener('hidden.bs.modal', function() {
-                deleteConfirmText.value = '';
-                confirmDeleteBtn.disabled = true;
-                deleteConfirmText.classList.remove('is-valid', 'is-invalid');
-            });
-
-            deleteModal.addEventListener('shown.bs.modal', function() {
-                deleteConfirmText.focus();
-            });
-        }
-    }
-
-    // Backup modal opener
-    const deleteBtn = document.getElementById('deleteBtn');
-    if (deleteBtn && deleteModal) {
-        deleteBtn.addEventListener('click', function() {
-            if (!deleteModal.classList.contains('show')) {
-                if (typeof bootstrap !== 'undefined') {
-                    const modalInstance = bootstrap.Modal.getOrCreateInstance(deleteModal);
-                    modalInstance.show();
-                } else if (typeof coreui !== 'undefined' && coreui.Modal) {
-                    const modalInstance = coreui.Modal.getOrCreateInstance(deleteModal);
-                    modalInstance.show();
-                }
-            }
-        });
-    }
-</script>
+{# Server-side data consumed by filament_form.js #}
+<script type="application/json" id="filament-type-data">{{ filament_type_map|safe }}</script>
+<script src="{% static 'bambu_run/js/filament_form.js' %}"></script>
 {% endblock %}

@@ -259,6 +259,10 @@ class FilamentColor(models.Model):
         default='Bambu Lab',
         help_text="Manufacturer name"
     )
+    is_transparent = models.BooleanField(
+        default=False,
+        help_text="True for clear/transparent filaments — display as checkerboard, not solid color"
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -328,6 +332,10 @@ class Filament(models.Model):
     color_hex = models.CharField(
         max_length=7, null=True, blank=True,
         help_text="Color hex code for display (#RRGGBB)"
+    )
+    is_transparent = models.BooleanField(
+        default=False,
+        help_text="True for clear/transparent filaments — display as checkerboard, not solid color"
     )
 
     # Physical properties

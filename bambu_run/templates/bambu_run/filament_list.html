@@ -122,7 +122,11 @@
                             </td>
                             <td class="align-middle">
                                 <div class="d-flex align-items-center">
+                                    {% if filament.is_transparent %}
+                                    <div style="width: 30px; height: 30px; border-radius: 4px; margin-right: 10px; border: 1px solid #ddd; background: repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 0 0/10px 10px;" title="Clear / Transparent"></div>
+                                    {% else %}
                                     <div style="width: 30px; height: 30px; background-color: {{ filament.color_hex|default:'#999' }}; border-radius: 4px; margin-right: 10px; border: 1px solid #ddd;"></div>
+                                    {% endif %}
                                     {{ filament.color }}
                                 </div>
                             </td>

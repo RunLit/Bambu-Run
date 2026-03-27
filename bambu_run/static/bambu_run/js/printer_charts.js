@@ -646,8 +646,20 @@ function hexToRgba(hex, alpha) {
 function applyFilamentColors() {
     // Apply colors to filament cards
     document.querySelectorAll('.filament-card').forEach(card => {
+        const isTransparent = card.getAttribute('data-filament-transparent') === 'true';
         const colorHex = card.getAttribute('data-filament-color');
-        if (colorHex) {
+
+        if (isTransparent) {
+            // Checkerboard left border and subtle background for clear filaments
+            card.style.borderLeft = '4px solid #aaa';
+            card.style.background = 'repeating-conic-gradient(rgba(180,180,180,0.15) 0% 25%, transparent 0% 50%) 0 0/10px 10px';
+
+            const badge = card.querySelector('.filament-badge');
+            if (badge) {
+                badge.style.backgroundColor = '#aaa';
+                badge.style.color = '#fff';
+            }
+        } else if (colorHex) {
             const color = '#' + colorHex;
 
             // Set card background with gradient

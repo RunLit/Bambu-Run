@@ -3,14 +3,23 @@ Utility functions for filament color matching
 """
 
 # BambuLab AMS reports colors as 8-char hex with an alpha channel suffix (e.g. '489FDFFF').
-# The last two chars are always 'FF' (fully opaque). Only the first 6 chars are the RGB value.
+# Opaque filaments use alpha 'FF'. Clear/transparent filaments use alpha '00' (e.g. '00000000').
 MQTT_COLOR_HEX_LENGTH = 6
+
+
+def is_mqtt_color_transparent(mqtt_color):
+    """
+    Return True if the AMS color represents a clear/transparent filament.
+    Bambu Lab uses alpha=00 for transparent (e.g. '00000000'), not 'FF' like opaque filaments.
+    """
+    return bool(mqtt_color) and len(mqtt_color) == 8 and mqtt_color[6:8].upper() == '00'
 
 
 def strip_color_padding(mqtt_color):
     """
-    Strip FF padding from MQTT color
-    MQTT: '000000FF' -> '000000'
+    Strip alpha padding from MQTT color, returning the 6-char RGB hex.
+    MQTT: '000000FF' -> '000000'  (opaque black)
+    MQTT: '00000000' -> '000000'  (transparent — use is_mqtt_color_transparent() to distinguish)
     MQTT: 'FF6A13FF' -> 'FF6A13'
     """
     if not mqtt_color:

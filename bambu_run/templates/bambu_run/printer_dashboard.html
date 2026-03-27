@@ -152,7 +152,7 @@
                     <div class="row g-3">
                         {% for filament in stats.filaments %}
                         <div class="col-12 col-md-6 col-lg-3">
-                            <div class="card filament-card" data-filament-color="{{ filament.color|slice:':6' }}">
+                            <div class="card filament-card" data-filament-color="{{ filament.color|slice:':6' }}"{% if filament.is_transparent %} data-filament-transparent="true"{% endif %}>
                                 <div class="card-body">
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <h6 class="mb-0">Tray {{ filament.tray_id }}</h6>

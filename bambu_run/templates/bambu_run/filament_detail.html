@@ -27,10 +27,14 @@
                 <div class="card-body">
                     <h6>Color</h6>
                     <div class="d-flex align-items-center">
+                        {% if filament.is_transparent %}
+                        <div style="width: 50px; height: 50px; border-radius: 8px; margin-right: 15px; border: 2px solid #ddd; background: repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 0 0/10px 10px;" title="Clear / Transparent"></div>
+                        {% else %}
                         <div style="width: 50px; height: 50px; background-color: {{ filament.color_hex|default:'#999' }}; border-radius: 8px; margin-right: 15px; border: 2px solid #ddd;"></div>
+                        {% endif %}
                         <div>
                             <strong>{{ filament.color }}</strong><br>
-                            <small class="text-muted">{{ filament.color_hex }}</small>
+                            <small class="text-muted">{% if filament.is_transparent %}Clear / Transparent{% else %}{{ filament.color_hex }}{% endif %}</small>
                         </div>
                     </div>
                 </div>
