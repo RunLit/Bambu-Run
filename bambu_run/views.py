@@ -130,6 +130,24 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
             except Exception:
                 filaments_list = []
 
+            subtask_name = latest_metric.subtask_name or "No active print"
+            # Look up active PrintJob for a better display name (cloud design_title)
+            job_display_name = subtask_name
+            if latest_metric.subtask_name:
+                active_job = (
+                    PrintJob.objects.filter(
+                        device=printer_device,
+                        project_name=latest_metric.subtask_name,
+                        end_time__isnull=True,
+                    ).select_related('cloud_task').first()
+                    or PrintJob.objects.filter(
+                        device=printer_device,
+                        project_name=latest_metric.subtask_name,
+                    ).select_related('cloud_task').order_by('-start_time').first()
+                )
+                if active_job:
+                    job_display_name = active_job.display_name
+
             stats = {
                 "nozzle_temp": float(latest_metric.nozzle_temp) if latest_metric.nozzle_temp else 0,
                 "bed_temp": float(latest_metric.bed_temp) if latest_metric.bed_temp else 0,
@@ -137,7 +155,8 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
                 "print_percent": latest_metric.print_percent or 0,
                 "gcode_state": latest_metric.gcode_state or "Unknown",
                 "print_type": latest_metric.print_type or "idle",
-                "subtask_name": latest_metric.subtask_name or "No active print",
+                "subtask_name": subtask_name,
+                "job_display_name": job_display_name,
                 "chamber_light": latest_metric.chamber_light or "unknown",
                 "ams_temp": float(latest_metric.ams_temp) if latest_metric.ams_temp else None,
                 "ams_humidity": latest_metric.ams_humidity,
@@ -158,7 +177,24 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
         return context
 
     def _calculate_project_markers(self, metrics, timezone_info):
-        """Calculate where print jobs start and end"""
+        """Calculate where print jobs start and end, using cloud design_title when available."""
+        if not metrics:
+            return []
+
+        # Build a lookup: subtask_name -> display_name from PrintJobs in this time window
+        window_start = metrics[0].timestamp
+        window_end = metrics[-1].timestamp
+        device = metrics[0].device
+        jobs_qs = PrintJob.objects.filter(
+            device=device,
+            start_time__gte=window_start - timedelta(minutes=5),
+            start_time__lte=window_end + timedelta(minutes=5),
+        ).select_related('cloud_task')
+        # Map project_name (= subtask_name) -> best display name
+        subtask_to_display = {}
+        for job in jobs_qs:
+            subtask_to_display[job.project_name] = job.display_name
+
         markers = []
         current_job = None
         last_state = None
@@ -170,21 +206,23 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
             is_printing = gcode_state not in ['FINISH', 'IDLE', None, '']
 
             if subtask and subtask != current_job and is_printing:
+                display = subtask_to_display.get(subtask, subtask)
                 markers.append({
                     'type': 'start',
                     'index': idx,
                     'timestamp': metric.timestamp.astimezone(timezone_info).isoformat(),
-                    'project_name': subtask,
+                    'project_name': display,
                 })
                 current_job = subtask
                 last_state = gcode_state
 
             elif current_job and last_state and last_state not in ['FINISH', 'IDLE'] and gcode_state in ['FINISH', 'IDLE']:
+                display = subtask_to_display.get(current_job, current_job)
                 markers.append({
                     'type': 'end',
                     'index': idx,
                     'timestamp': metric.timestamp.astimezone(timezone_info).isoformat(),
-                    'project_name': current_job,
+                    'project_name': display,
                 })
                 current_job = None
 
@@ -613,7 +651,7 @@ class FilamentDetailView(LoginRequiredMixin, DetailView):
         context['bambu_run_base_template'] = app_settings.BASE_TEMPLATE
         filament = self.object
 
-        context['print_usages'] = filament.print_usages.select_related('print_job').order_by('-print_job__start_time')[:20]
+        context['print_usages'] = filament.print_usages.select_related('print_job__cloud_task').order_by('-print_job__start_time')[:20]
 
         total_consumed = filament.print_usages.aggregate(
             total=Sum('consumed_percent')

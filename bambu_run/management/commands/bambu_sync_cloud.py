@@ -112,8 +112,8 @@ class Command(BaseCommand):
                         serial_number=cloud_task.device_serial
                     ).first()
                     if printer:
-                        window_start = cloud_task.cloud_start_time - timedelta(minutes=2)
-                        window_end = cloud_task.cloud_start_time + timedelta(minutes=2)
+                        window_start = cloud_task.cloud_start_time - timedelta(minutes=5)
+                        window_end = cloud_task.cloud_start_time + timedelta(minutes=5)
                         historical = PrintJob.objects.filter(
                             device=printer,
                             start_time__gte=window_start,

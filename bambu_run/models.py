@@ -595,6 +595,13 @@ class PrintJob(models.Model):
         status = self.final_status or 'In Progress'
         return f"{self.project_name} ({status}) - {self.start_time.strftime('%Y-%m-%d %H:%M')}"
 
+    @property
+    def display_name(self):
+        """Human-readable job name: cloud design_title if available, else project_name."""
+        if self.cloud_task_id and self.cloud_task and self.cloud_task.design_title:
+            return self.cloud_task.design_title
+        return self.project_name
+
     def calculate_duration(self):
         """Calculate print duration if end_time is set"""
         if self.end_time and self.start_time:
