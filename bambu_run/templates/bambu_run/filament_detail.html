@@ -154,7 +154,7 @@
                     <tbody>
                         {% for usage in print_usages %}
                         <tr>
-                            <td>{{ usage.print_job.project_name }}</td>
+                            <td>{{ usage.print_job.display_name }}</td>
                             <td>{{ usage.print_job.start_time|date:"Y-m-d H:i" }}</td>
                             <td>Tray {{ usage.tray_id }}</td>
                             <td>{{ usage.consumed_percent|default:"?" }}% ({{ usage.consumed_grams|default:"?" }}g)</td>

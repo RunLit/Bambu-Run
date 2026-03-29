@@ -24,7 +24,7 @@ RUN pip install --no-cache-dir bambu-lab-cloud-api --no-deps && \
 
 # Install project and remaining dependencies (pip sees opencv-python already satisfied)
 COPY pyproject.toml .
-RUN pip install --no-cache-dir ".[standalone]"
+RUN pip install --no-cache-dir ".[standalone,mcp]"
 
 # Copy application code
 COPY . .
@@ -40,5 +40,6 @@ RUN python standalone/manage.py collectstatic --noinput 2>/dev/null || true
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 EXPOSE 8000
+EXPOSE 8808
 
 CMD ["supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
