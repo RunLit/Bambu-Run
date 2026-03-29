@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bambu-run"
-version = "0.1.3"
+version = "0.1.4"
 description = "Django reusable app for Bambu Lab 3D printer monitoring and filament inventory management"
 readme = "README.md"
 license = {text = "MIT"}
