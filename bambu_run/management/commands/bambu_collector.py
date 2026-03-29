@@ -473,6 +473,7 @@ class Command(BaseCommand):
             if self.current_print_job:
                 self._finalize_print_job(metric, snapshot)
 
+            raw_task_id = snapshot.get('task_id')
             self.current_print_job = PrintJob.objects.create(
                 device=self.printer_device,
                 project_name=subtask_name,
@@ -480,7 +481,8 @@ class Command(BaseCommand):
                 start_time=metric.timestamp,
                 start_metric=metric,
                 total_layers=snapshot.get('total_layer_num'),
-                completion_percent=snapshot.get('print_percent', 0)
+                completion_percent=snapshot.get('print_percent', 0),
+                cloud_task_id_raw=int(raw_task_id) if raw_task_id else None,
             )
             self.trays_used = set()
             logger.info(f"Print job started: {subtask_name}")
@@ -519,6 +521,12 @@ class Command(BaseCommand):
         self.current_print_job.completion_percent = snapshot.get('print_percent', 0)
         self.current_print_job.calculate_duration()
         self.current_print_job.save()
+
+        try:
+            from bambu_run.bambu_cloud import fetch_and_upsert_task
+            fetch_and_upsert_task(self.printer_client._client, self.current_print_job)
+        except Exception as e:
+            logger.warning(f"Cloud task sync skipped (non-fatal): {e}")
 
         start_metric = self.current_print_job.start_metric
         if not start_metric:

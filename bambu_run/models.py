@@ -492,6 +492,47 @@ class FilamentSnapshot(models.Model):
         return f"Tray {self.tray_id}: {filament_info}"
 
 
+class BambuCloudTask(models.Model):
+    """Cloud task record synced from Bambu Cloud API (v1/user-service/my/tasks)."""
+
+    task_id = models.BigIntegerField(unique=True, db_index=True, help_text="Bambu Cloud task ID (matches MQTT task_id)")
+    design_id = models.IntegerField(null=True, blank=True, help_text="Makerworld design ID")
+    design_title = models.CharField(max_length=500, blank=True, help_text="Human project name from Makerworld (designTitle)")
+    plate_title = models.CharField(max_length=500, blank=True, help_text="Plate/variant name (matches MQTT subtask_name)")
+    model_id = models.CharField(max_length=100, blank=True)
+    profile_id = models.BigIntegerField(null=True, blank=True, help_text="Bambu Cloud profile ID")
+    plate_index = models.SmallIntegerField(null=True, blank=True)
+    device_serial = models.CharField(max_length=100, blank=True, help_text="Printer serial number from cloud")
+    cover_url = models.URLField(max_length=1000, blank=True, help_text="Plate preview image URL from S3")
+    weight_grams = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, help_text="Actual filament weight reported by cloud")
+    length_mm = models.IntegerField(null=True, blank=True, help_text="Filament length in mm")
+    cost_time_seconds = models.IntegerField(null=True, blank=True, help_text="Cloud-measured print duration in seconds")
+    cloud_status = models.SmallIntegerField(null=True, blank=True, help_text="2=finish, 3=failed")
+    bed_type = models.CharField(max_length=50, blank=True)
+    use_ams = models.BooleanField(default=True)
+    print_mode = models.CharField(max_length=50, blank=True, help_text="cloud_file, local, etc.")
+    ams_detail_mapping = models.JSONField(default=list, help_text="Per-slot filament weight breakdown from cloud")
+    cloud_start_time = models.DateTimeField(null=True, blank=True)
+    cloud_end_time = models.DateTimeField(null=True, blank=True)
+    raw_data = models.JSONField(default=dict, help_text="Full task response — preserved for future use")
+    synced_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "infrastructure_cloud_task"
+        verbose_name = "Bambu Cloud Task"
+        verbose_name_plural = "Bambu Cloud Tasks"
+        ordering = ["-cloud_start_time"]
+        indexes = [
+            models.Index(fields=["task_id"]),
+            models.Index(fields=["design_id"]),
+            models.Index(fields=["-cloud_start_time"]),
+        ]
+
+    def __str__(self):
+        name = self.design_title or self.plate_title or f"task-{self.task_id}"
+        return f"{name} ({self.cloud_start_time.strftime('%Y-%m-%d') if self.cloud_start_time else 'unknown date'})"
+
+
 class PrintJob(models.Model):
     """Represents a single print job from start to finish"""
 
@@ -504,6 +545,16 @@ class PrintJob(models.Model):
         max_length=200, help_text="From subtask_name field"
     )
     gcode_file = models.CharField(max_length=200, null=True, blank=True)
+
+    cloud_task = models.ForeignKey(
+        'BambuCloudTask', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='print_jobs',
+        help_text="Linked Bambu Cloud task record (set by bambu_sync_cloud or collector)"
+    )
+    cloud_task_id_raw = models.BigIntegerField(
+        null=True, blank=True, db_index=True,
+        help_text="MQTT task_id — captured at job start, used to link cloud task"
+    )
 
     start_time = models.DateTimeField(help_text="When print started")
     end_time = models.DateTimeField(null=True, blank=True, help_text="When print finished/failed")

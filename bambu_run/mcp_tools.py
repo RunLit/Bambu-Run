@@ -30,6 +30,18 @@ def _redact(value, label="[redacted]"):
     return value
 
 
+def _job_name(job):
+    """Return the best available display name for a print job.
+
+    Prefers cloud design_title (e.g., 'Planetary Gears Finger Fidget Spinners')
+    over the MQTT subtask_name (e.g., 'All variants at 0.16mm high quality').
+    Falls back to project_name for local/SD prints with no cloud task.
+    """
+    if job.cloud_task_id and job.cloud_task and job.cloud_task.design_title:
+        return job.cloud_task.design_title
+    return job.project_name
+
+
 def _format_duration(minutes):
     """Format minutes into human-readable duration."""
     if minutes is None:
@@ -148,7 +160,7 @@ def get_print_history(status=None, days=None, project_name=None, limit=20):
     """Print job history with optional filters."""
     from .models import PrintJob
 
-    qs = PrintJob.objects.select_related("device")
+    qs = PrintJob.objects.select_related("device", "cloud_task")
 
     if status:
         qs = qs.filter(final_status__iexact=status)
@@ -156,7 +168,10 @@ def get_print_history(status=None, days=None, project_name=None, limit=20):
         cutoff = timezone.now() - timedelta(days=int(days))
         qs = qs.filter(start_time__gte=cutoff)
     if project_name:
-        qs = qs.filter(project_name__icontains=project_name)
+        qs = qs.filter(
+            Q(project_name__icontains=project_name)
+            | Q(cloud_task__design_title__icontains=project_name)
+        )
 
     jobs = qs[:int(limit)]
     if not jobs:
@@ -167,7 +182,7 @@ def get_print_history(status=None, days=None, project_name=None, limit=20):
     lines.append("|----|---------|---------|--------|----------|----------|---------|")
     for j in jobs:
         lines.append(
-            f"| {j.id} | {j.project_name} | {j.device.name} | "
+            f"| {j.id} | {_job_name(j)} | {j.device.name} | "
             f"{j.final_status or 'In Progress'} | {j.completion_percent}% | "
             f"{_format_duration(j.duration_minutes)} | "
             f"{_local_dt(j.start_time, '%Y-%m-%d %H:%M')} |"
@@ -180,11 +195,13 @@ def get_print_job_detail(job_id):
     from .models import FilamentUsage, PrintJob
 
     try:
-        job = PrintJob.objects.select_related("device").get(id=job_id)
+        job = PrintJob.objects.select_related("device", "cloud_task").get(id=job_id)
     except PrintJob.DoesNotExist:
         return f"Print job #{job_id} not found."
 
-    lines = [f"# Print Job: {job.project_name}", ""]
+    lines = [f"# Print Job: {_job_name(job)}", ""]
+    if job.cloud_task and job.cloud_task.design_title and job.cloud_task.design_title != job.project_name:
+        lines.append(f"**Plate**: {job.project_name}")
     lines.append(f"**Printer**: {job.device.name}")
     lines.append(f"**Status**: {job.final_status or 'In Progress'}")
     lines.append(f"**Progress**: {job.completion_percent}%")
@@ -469,8 +486,8 @@ def get_printer_health(printer_id=None):
         )
         if failed.exists():
             parts.append(f"### Recent Failures (7d): {failed.count()}")
-            for job in failed[:5]:
-                parts.append(f"- {job.project_name} ({job.final_status}) — {_local_dt(job.start_time, '%m-%d %H:%M')}")
+            for job in failed.select_related("cloud_task")[:5]:
+                parts.append(f"- {_job_name(job)} ({job.final_status}) — {_local_dt(job.start_time, '%m-%d %H:%M')}")
 
         # Success rate
         week_jobs = PrintJob.objects.filter(device=printer, start_time__gte=week_ago)
@@ -491,8 +508,10 @@ def search_print_jobs(query):
     if not query:
         return "Please provide a search query."
 
-    jobs = PrintJob.objects.select_related("device").filter(
-        Q(project_name__icontains=query) | Q(gcode_file__icontains=query)
+    jobs = PrintJob.objects.select_related("device", "cloud_task").filter(
+        Q(project_name__icontains=query)
+        | Q(gcode_file__icontains=query)
+        | Q(cloud_task__design_title__icontains=query)
     )[:20]
 
     if not jobs:
@@ -504,7 +523,7 @@ def search_print_jobs(query):
     lines.append("|----|---------|---------|--------|------|")
     for j in jobs:
         lines.append(
-            f"| {j.id} | {j.project_name} | {j.device.name} | "
+            f"| {j.id} | {_job_name(j)} | {j.device.name} | "
             f"{j.final_status or 'In Progress'} | {_local_dt(j.start_time, '%Y-%m-%d')} |"
         )
     return "\n".join(lines)

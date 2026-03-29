@@ -482,6 +482,8 @@ class PrinterState:
             "print_line_number": self.print_line_number,
             "subtask_name": self.subtask_name,
             "gcode_file": self.gcode_file,
+            "task_id": self.task_id,
+            "project_id": self.project_id,
             "cooling_fan_speed": self.cooling_fan_speed,
             "heatbreak_fan_speed": self.heatbreak_fan_speed,
             "big_fan1_speed": self.big_fan1_speed,

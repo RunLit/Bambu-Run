@@ -72,5 +72,14 @@ class _Settings:
     def MCP_HIDE_SENSITIVE(self):
         return get_setting("BAMBU_RUN_MCP_HIDE_SENSITIVE", False)
 
+    # Cloud sync settings
+    @property
+    def CLOUD_SYNC_ENABLED(self):
+        return get_setting("BAMBU_RUN_CLOUD_SYNC_ENABLED", True)
+
+    @property
+    def CLOUD_SYNC_DAYS(self):
+        return get_setting("BAMBU_RUN_CLOUD_SYNC_DAYS", 30)
+
 
 app_settings = _Settings()

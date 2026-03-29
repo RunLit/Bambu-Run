@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Printer, PrinterMetrics, Filament, FilamentType, FilamentSnapshot, PrintJob, FilamentUsage
+from .models import Printer, PrinterMetrics, Filament, FilamentType, FilamentSnapshot, PrintJob, FilamentUsage, BambuCloudTask
 
 
 @admin.register(Printer)
@@ -105,3 +105,21 @@ class FilamentUsageAdmin(admin.ModelAdmin):
     list_display = ('print_job', 'filament', 'tray_id', 'consumed_percent', 'consumed_grams', 'is_primary')
     list_filter = ('is_primary', 'tray_id')
     readonly_fields = ('consumed_percent', 'consumed_grams')
+
+
+@admin.register(BambuCloudTask)
+class BambuCloudTaskAdmin(admin.ModelAdmin):
+    list_display = ('task_id', 'design_title', 'plate_title', 'device_serial', 'cloud_status', 'weight_grams', 'cloud_start_time', 'synced_at')
+    list_filter = ('cloud_status', 'use_ams', 'bed_type')
+    search_fields = ('design_title', 'plate_title', 'device_serial', 'task_id')
+    readonly_fields = ('task_id', 'synced_at', 'raw_data')
+    date_hierarchy = 'cloud_start_time'
+
+    fieldsets = (
+        ('Identity', {'fields': ('task_id', 'design_id', 'design_title', 'plate_title', 'model_id', 'profile_id', 'plate_index')}),
+        ('Device & Print', {'fields': ('device_serial', 'cloud_status', 'bed_type', 'use_ams', 'print_mode')}),
+        ('Filament', {'fields': ('weight_grams', 'length_mm', 'ams_detail_mapping')}),
+        ('Times', {'fields': ('cloud_start_time', 'cloud_end_time', 'cost_time_seconds', 'synced_at')}),
+        ('Media', {'fields': ('cover_url',)}),
+        ('Raw', {'fields': ('raw_data',), 'classes': ('collapse',)}),
+    )
