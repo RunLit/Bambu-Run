@@ -1,0 +1,5 @@
+Iridium Gold Metallic	#B39B84
+Copper Brown Metallic	#AA6443
+Oxide Green Metallic	#1D7C6A
+Cobalt Blue Metallic	#39699E
+Iron Gray Metallic	#43403D

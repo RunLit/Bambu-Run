@@ -1,0 +1,5 @@
+Slate Gray Sparkle	#8E9089	
+Crimson Red Sparkle	#792B36	
+Royal Purple Sparkle	#483D8B	
+Alpine Green Sparkle	#3F5443	
+Onyx Black Sparkle	#2D2B28

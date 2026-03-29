@@ -1,0 +1,10 @@
+Teal  Hex:#009FA1
+Light Jade  Hex:#96D8AF
+Blue  Hex:#0047BB
+Mellow Yellow  Hex:#F5DBAB
+Purple  Hex:#8344B0
+Cherry Pink  Hex:#F5B6CD
+Orange  Hex:#F74E02
+Ice Blue  Hex:#B8CDE9
+Red  Hex:#B50011
+Lavender  Hex:#B8ACD6

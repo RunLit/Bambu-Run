@@ -1,0 +1,13 @@
+Gold	#F4A925	
+Silver	#C8C8C8	
+Titan Gray	#5F6367	
+Blue	#008BDA	
+Purple	#8671CB	
+Candy Red	#D02727	
+Candy Green	#018814	
+Rose Gold	#BA9594	
+Baby Blue	#A8C6EE	
+Pink	#F7ADA6	
+Mint	#96DCB9	
+Champagne	#F3CFB2	
+White	#FFFFFF

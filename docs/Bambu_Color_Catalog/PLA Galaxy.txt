@@ -1,0 +1,4 @@
+Brown	#684A43	
+Green	#3B665E	
+Nebulae	#424379	
+Purple	#594177
