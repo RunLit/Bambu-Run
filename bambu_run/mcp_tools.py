@@ -7,11 +7,20 @@ RAE can reuse these directly.
 
 from datetime import timedelta
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from django.db.models import Avg, Count, Max, Min, Q, Sum
 from django.utils import timezone
 
 from .conf import app_settings
+
+
+def _local_dt(dt, fmt="%Y-%m-%d %H:%M %Z"):
+    """Convert a UTC-aware datetime to the configured local timezone for display."""
+    if dt is None:
+        return "—"
+    tz = ZoneInfo(app_settings.TIMEZONE)
+    return dt.astimezone(tz).strftime(fmt)
 
 
 def _redact(value, label="[redacted]"):
@@ -108,7 +117,7 @@ def get_printer_status(printer_id=None):
                 for msg in metric.hms[:5]:
                     lines.append(f"- HMS: {msg}")
 
-        lines.append(f"\n*Last updated: {metric.timestamp.strftime('%Y-%m-%d %H:%M:%S')}*")
+        lines.append(f"\n*Last updated: {_local_dt(metric.timestamp, '%Y-%m-%d %H:%M:%S %Z')}*")
         parts.append("\n".join(lines))
 
     return "\n\n---\n\n".join(parts)
@@ -161,7 +170,7 @@ def get_print_history(status=None, days=None, project_name=None, limit=20):
             f"| {j.id} | {j.project_name} | {j.device.name} | "
             f"{j.final_status or 'In Progress'} | {j.completion_percent}% | "
             f"{_format_duration(j.duration_minutes)} | "
-            f"{j.start_time.strftime('%Y-%m-%d %H:%M')} |"
+            f"{_local_dt(j.start_time, '%Y-%m-%d %H:%M')} |"
         )
     return "\n".join(lines)
 
@@ -181,9 +190,9 @@ def get_print_job_detail(job_id):
     lines.append(f"**Progress**: {job.completion_percent}%")
     if job.gcode_file:
         lines.append(f"**G-code**: {job.gcode_file}")
-    lines.append(f"**Started**: {job.start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append(f"**Started**: {_local_dt(job.start_time, '%Y-%m-%d %H:%M:%S %Z')}")
     if job.end_time:
-        lines.append(f"**Ended**: {job.end_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        lines.append(f"**Ended**: {_local_dt(job.end_time, '%Y-%m-%d %H:%M:%S %Z')}")
     lines.append(f"**Duration**: {_format_duration(job.duration_minutes)}")
     if job.total_layers:
         lines.append(f"**Total Layers**: {job.total_layers}")
@@ -234,7 +243,7 @@ def list_filaments(type=None, brand=None, color=None, loaded_in_ams=None, low_fi
         color_display = f"{f.color}"
         if f.color_hex:
             color_display += f" ({f.color_hex})"
-        last_used = f.last_used.strftime("%Y-%m-%d") if f.last_used else "-"
+        last_used = _local_dt(f.last_used, "%Y-%m-%d") if f.last_used else "-"
         lines.append(
             f"| {f.id} | {f.brand} | {f.sub_type or f.type} | "
             f"{color_display} | {f.remaining_percent}% | "
@@ -278,7 +287,7 @@ def get_filament_detail(filament_id):
         for u in usages:
             lines.append(
                 f"| {u.print_job.project_name} | "
-                f"{u.print_job.start_time.strftime('%Y-%m-%d')} | "
+                f"{_local_dt(u.print_job.start_time, '%Y-%m-%d')} | "
                 f"{u.consumed_percent or 0}% | {u.consumed_grams or '-'}g |"
             )
 
@@ -431,7 +440,7 @@ def get_printer_health(printer_id=None):
             signal = latest.wifi_signal_dbm
             quality = "Excellent" if signal > -50 else "Good" if signal > -60 else "Fair" if signal > -70 else "Poor"
             parts.append(f"- WiFi: {signal} dBm ({quality})")
-        parts.append(f"- Last seen: {latest.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
+        parts.append(f"- Last seen: {_local_dt(latest.timestamp, '%Y-%m-%d %H:%M:%S %Z')}")
         age = (timezone.now() - latest.timestamp).total_seconds()
         if age > 300:
             parts.append(f"- **Warning**: No data for {_format_duration(age / 60)}")
@@ -461,7 +470,7 @@ def get_printer_health(printer_id=None):
         if failed.exists():
             parts.append(f"### Recent Failures (7d): {failed.count()}")
             for job in failed[:5]:
-                parts.append(f"- {job.project_name} ({job.final_status}) — {job.start_time.strftime('%m-%d %H:%M')}")
+                parts.append(f"- {job.project_name} ({job.final_status}) — {_local_dt(job.start_time, '%m-%d %H:%M')}")
 
         # Success rate
         week_jobs = PrintJob.objects.filter(device=printer, start_time__gte=week_ago)
@@ -496,7 +505,7 @@ def search_print_jobs(query):
     for j in jobs:
         lines.append(
             f"| {j.id} | {j.project_name} | {j.device.name} | "
-            f"{j.final_status or 'In Progress'} | {j.start_time.strftime('%Y-%m-%d')} |"
+            f"{j.final_status or 'In Progress'} | {_local_dt(j.start_time, '%Y-%m-%d')} |"
         )
     return "\n".join(lines)
 
