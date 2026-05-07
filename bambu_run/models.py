@@ -2,6 +2,33 @@ from django.db import models
 from django.utils import timezone
 
 
+# Bambu AMS model-code → human-readable type label.
+# Source: live H2C MQTT probe — `print.ams.ams[i].info` field.
+# Add new codes as they are observed (e.g. AMS Lite, future variants).
+AMS_INFO_TO_TYPE = {
+    "1001": "AMS",
+    "1003": "AMS 2 Pro",
+    "2104": "AMS HT",
+}
+
+AMS_TYPE_CHOICES = [
+    ("AMS", "AMS"),
+    ("AMS 2 Pro", "AMS 2 Pro"),
+    ("AMS HT", "AMS HT"),
+]
+
+
+def ams_type_from_info(info_code) -> str:
+    """Resolve an AMS unit's `info` model code to a human label.
+
+    The HT unit reports its `id` with the 0x80 bit set (e.g. 128) — when the info
+    code is unknown, that bit is a reasonable secondary hint for HT identification.
+    """
+    if info_code is None:
+        return ""
+    return AMS_INFO_TO_TYPE.get(str(info_code), "")
+
+
 class Printer(models.Model):
     """Represents a Bambu Lab 3D printer device"""
 
@@ -58,11 +85,31 @@ class PrinterMetrics(models.Model):
         max_digits=5, decimal_places=2, null=True, blank=True
     )
 
-    # Nozzle info
+    # Nozzle info — single-nozzle / right-side back-compat fields. On dual-nozzle
+    # printers (H2C) these mirror the right extruder; the left extruder uses the
+    # `_left` columns below.
     nozzle_diameter = models.DecimalField(
         max_digits=3, decimal_places=2, null=True, blank=True
     )
     nozzle_type = models.CharField(max_length=50, null=True, blank=True)
+
+    # H2C dual-nozzle: left-side fields (NULL on single-nozzle printers).
+    nozzle_temp_left = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        help_text="Left extruder current temperature (°C). H2C only."
+    )
+    nozzle_target_temp_left = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        help_text="Left extruder target temperature (°C). H2C only."
+    )
+    nozzle_diameter_left = models.DecimalField(
+        max_digits=3, decimal_places=2, null=True, blank=True,
+        help_text="Left nozzle diameter (mm). H2C only."
+    )
+    nozzle_type_left = models.CharField(
+        max_length=50, null=True, blank=True,
+        help_text="Left nozzle type (e.g. HS01-0.4). H2C only."
+    )
 
     # Print job status
     gcode_state = models.CharField(
@@ -365,7 +412,16 @@ class Filament(models.Model):
     )
     current_tray_id = models.IntegerField(
         null=True, blank=True,
-        help_text="Which AMS slot (0-3) if loaded"
+        help_text="Tray slot index within its AMS unit (0-3 for AMS/AMS 2 Pro, 0 for AMS HT)"
+    )
+    ams_unit_id = models.PositiveSmallIntegerField(
+        null=True, blank=True, db_index=True,
+        help_text="Which physical AMS unit this spool is loaded in (matches MQTT ams[i].id; 128 = AMS HT)"
+    )
+    ams_type = models.CharField(
+        max_length=32, blank=True, default="",
+        choices=AMS_TYPE_CHOICES,
+        help_text="Type of the AMS unit this spool is loaded in (AMS / AMS 2 Pro / AMS HT)"
     )
     last_loaded_date = models.DateTimeField(
         null=True, blank=True,

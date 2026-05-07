@@ -22,7 +22,41 @@
 
     <!-- Summary Cards Row -->
     <div class="row g-3 mb-4">
-        <!-- Nozzle Temperature Card -->
+        {% if stats.is_dual_nozzle %}
+        <!-- Right Nozzle (dual-nozzle printers, e.g. H2C) -->
+        <div class="col-12 col-md-6 col-lg-3">
+            <div class="card infra-card-warning">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="stat-label">Right Nozzle</div>
+                            <div class="stat-value">{{ stats.nozzle_temp|floatformat:1 }}&deg;C</div>
+                            <div class="text-muted small">target {{ stats.nozzle_target_temp|floatformat:0 }}&deg;C
+                                {% if stats.nozzle_type %}· {{ stats.nozzle_type }}{% endif %}</div>
+                        </div>
+                        <i class="bi bi-thermometer-high" style="font-size: 2rem; opacity: 0.3;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Left Nozzle -->
+        <div class="col-12 col-md-6 col-lg-3">
+            <div class="card infra-card-warning">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="stat-label">Left Nozzle</div>
+                            <div class="stat-value">{{ stats.nozzle_temp_left|floatformat:1 }}&deg;C</div>
+                            <div class="text-muted small">target {{ stats.nozzle_target_temp_left|floatformat:0 }}&deg;C
+                                {% if stats.nozzle_type_left %}· {{ stats.nozzle_type_left }}{% endif %}</div>
+                        </div>
+                        <i class="bi bi-thermometer-high" style="font-size: 2rem; opacity: 0.3;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <!-- Nozzle Temperature Card (single-nozzle printers) -->
         <div class="col-12 col-md-6 col-lg-3">
             <div class="card infra-card-warning">
                 <div class="card-body">
@@ -36,6 +70,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
 
         <!-- Bed Temperature Card -->
         <div class="col-12 col-md-6 col-lg-3">
@@ -266,10 +301,10 @@
 
     <!-- Charts Section -->
     <div class="row g-3 mb-4">
-        <!-- Nozzle Temperature Chart -->
+        <!-- Nozzle Temperature Chart (right side / single nozzle) -->
         <div class="col-12 col-lg-6">
             <div class="card">
-                <div class="card-header">Nozzle Temperature</div>
+                <div class="card-header">{% if stats.is_dual_nozzle %}Right Nozzle Temperature{% else %}Nozzle Temperature{% endif %}</div>
                 <div class="card-body">
                     <div class="chart-container">
                         <canvas id="nozzleTempChart"></canvas>
@@ -277,6 +312,20 @@
                 </div>
             </div>
         </div>
+
+        {% if stats.is_dual_nozzle %}
+        <!-- Left Nozzle Temperature Chart (H2C-class dual-nozzle) -->
+        <div class="col-12 col-lg-6">
+            <div class="card">
+                <div class="card-header">Left Nozzle Temperature</div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="nozzleTempLeftChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
         <!-- Bed Temperature Chart -->
         <div class="col-12 col-lg-6">

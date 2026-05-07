@@ -1,7 +1,7 @@
 // 3D Printer Charts Initialization and Management
 // Chart.js implementation for printer metrics visualization
 
-let nozzleTempChart, bedTempChart, printProgressChart, fanSpeedsChart;
+let nozzleTempChart, nozzleTempLeftChart, bedTempChart, printProgressChart, fanSpeedsChart;
 let wifiSignalChart, amsConditionsChart, layerProgressChart, filamentTimelineChart;
 
 function showNoDataMessage(canvasId) {
@@ -74,6 +74,50 @@ function initPrinterCharts(printerData, apiUrl) {
         },
         options: getTemperatureChartOptions(tickColor, gridColor, '°C')
     });
+
+    // Initialize Left Nozzle Temperature Chart (H2C-class dual-nozzle).
+    // Mounted only when the canvas exists AND the API returned non-null
+    // left-side samples — single-nozzle printers leave the column NULL.
+    const nozzleLeftCanvas = document.getElementById('nozzleTempLeftChart');
+    const hasLeftData = Array.isArray(printerData.nozzle_temp_left)
+        && printerData.nozzle_temp_left.some(v => v !== null && v !== undefined);
+    if (nozzleLeftCanvas && hasLeftData) {
+        const nozzleLeftCtx = nozzleLeftCanvas.getContext('2d');
+        nozzleTempLeftChart = new Chart(nozzleLeftCtx, {
+            type: 'line',
+            data: {
+                labels: printerData.timestamps,
+                datasets: [
+                    {
+                        label: 'Actual Temp (Left)',
+                        data: printerData.nozzle_temp_left,
+                        borderColor: 'rgb(54, 162, 235)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                        tension: 0.3,
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        pointHoverRadius: 3,
+                        spanGaps: true
+                    },
+                    {
+                        label: 'Target Temp (Left)',
+                        data: printerData.nozzle_target_temp_left,
+                        borderColor: 'rgb(153, 102, 255)',
+                        backgroundColor: 'rgba(153, 102, 255, 0.05)',
+                        borderDash: [5, 5],
+                        tension: 0.3,
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        pointHoverRadius: 3,
+                        spanGaps: true
+                    }
+                ]
+            },
+            options: getTemperatureChartOptions(tickColor, gridColor, '°C')
+        });
+    } else if (nozzleLeftCanvas) {
+        showNoDataMessage('nozzleTempLeftChart');
+    }
 
     // Initialize Bed Temperature Chart
     const bedCtx = document.getElementById('bedTempChart').getContext('2d');
@@ -702,7 +746,7 @@ function updateChartTheme() {
 
     // Update all charts
     const charts = [
-        nozzleTempChart, bedTempChart, printProgressChart, fanSpeedsChart,
+        nozzleTempChart, nozzleTempLeftChart, bedTempChart, printProgressChart, fanSpeedsChart,
         wifiSignalChart, amsConditionsChart, layerProgressChart, filamentTimelineChart
     ];
 
@@ -804,7 +848,7 @@ function applyDateSeparatorsToAllPrinterCharts(timestamps, dates) {
     const sepAnnotations = buildDateSeparatorAnnotations(timestamps, dates);
 
     const charts = [
-        nozzleTempChart, bedTempChart, printProgressChart, fanSpeedsChart,
+        nozzleTempChart, nozzleTempLeftChart, bedTempChart, printProgressChart, fanSpeedsChart,
         wifiSignalChart, amsConditionsChart, layerProgressChart, filamentTimelineChart
     ];
 

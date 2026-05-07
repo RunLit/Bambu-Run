@@ -55,7 +55,7 @@ class FilamentForm(forms.ModelForm):
             'filament_type', 'type', 'sub_type', 'brand', 'color', 'color_hex', 'is_transparent',
             'diameter', 'initial_weight_grams',
             'remaining_percent', 'remaining_weight_grams',
-            'is_loaded_in_ams', 'current_tray_id',
+            'is_loaded_in_ams', 'current_tray_id', 'ams_unit_id', 'ams_type',
             'purchase_date', 'purchase_price', 'supplier', 'notes'
         ]
         widgets = {
@@ -87,7 +87,15 @@ class FilamentForm(forms.ModelForm):
             'remaining_weight_grams': forms.NumberInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
             'is_transparent': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_is_transparent'}),
             'is_loaded_in_ams': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'current_tray_id': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'max': '3'}),
+            'current_tray_id': forms.NumberInput(attrs={
+                'class': 'form-control', 'min': '0', 'max': '15',
+                'placeholder': '0–3 for AMS / AMS 2 Pro, 0 for AMS HT',
+            }),
+            'ams_unit_id': forms.NumberInput(attrs={
+                'class': 'form-control', 'min': '0', 'max': '255',
+                'placeholder': 'AMS unit id (0,1,… or 128 for AMS HT)',
+            }),
+            'ams_type': forms.Select(attrs={'class': 'form-select'}),
             'purchase_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'purchase_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'supplier': forms.TextInput(attrs={'class': 'form-control'}),
@@ -106,6 +114,8 @@ class FilamentForm(forms.ModelForm):
         self.fields['type'].required = False
         self.fields['sub_type'].required = False
         self.fields['brand'].required = False
+        self.fields['ams_unit_id'].required = False
+        self.fields['ams_type'].required = False
 
         self._populate_color_choices()
 

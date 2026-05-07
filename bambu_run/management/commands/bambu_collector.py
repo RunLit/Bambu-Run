@@ -111,6 +111,8 @@ class Command(BaseCommand):
 
         try:
             if run_once:
+                import time as _time
+                _time.sleep(5)
                 self._collect_printer_data()
                 logger.info("Single collection completed successfully")
             else:
@@ -121,6 +123,24 @@ class Command(BaseCommand):
         except Exception as e:
             logger.exception(f"Fatal error in main loop: {e}")
             raise CommandError(f"Runner failed: {e}")
+
+    def _request_full_status_when_ready(self, timeout: float = 20.0) -> None:
+        """Send pushall once the MQTT broker connection is confirmed.
+
+        BambuPrinter._connected is set True immediately after connect(blocking=False),
+        before the broker handshake. Poll MQTTClient.connected (set in _on_connect)
+        instead, so publish() won't raise "Not connected to broker".
+        """
+        import time as _time
+        deadline = _time.time() + timeout
+        while _time.time() < deadline:
+            mqtt_client = getattr(self.printer_client, "_mqtt", None)
+            if mqtt_client is not None and getattr(mqtt_client, "connected", False):
+                self.printer_client._mqtt.request_full_status()
+                logger.info("Sent MQTT pushall request")
+                return
+            _time.sleep(0.5)
+        logger.warning("MQTT broker connection not confirmed within %.1fs; skipping pushall", timeout)
 
     def _configure_logging(self):
         log_level = logging.DEBUG if self.verbose else logging.INFO
@@ -167,6 +187,11 @@ class Command(BaseCommand):
             logger.info("Initiating MQTT connection...")
             self.printer_client.connect(blocking=False)
             logger.info("MQTT connection initiated (non-blocking)")
+            # Request full status so AMS + dual-nozzle data arrive on startup.
+            try:
+                self._request_full_status_when_ready()
+            except Exception as e:
+                logger.warning("pushall request skipped (non-fatal): %s", e)
 
         except Exception as e:
             if "CERTIFICATE_VERIFY_FAILED" in str(e) or "SSL" in str(e):
@@ -377,6 +402,8 @@ class Command(BaseCommand):
             created_by='Auto Detection',
             is_loaded_in_ams=True,
             current_tray_id=tray_data.get('tray_id'),
+            ams_unit_id=tray_data.get('ams_unit_id'),
+            ams_type=tray_data.get('ams_type', '') or '',
             last_loaded_date=timezone.now(),
         )
 
@@ -390,8 +417,12 @@ class Command(BaseCommand):
 
         return filament
 
-    def _update_filament_status(self, filament, tray_id, remain_percent):
+    def _update_filament_status(self, filament, tray_id, remain_percent, tray_data=None):
         from bambu_run.models import Filament
+
+        tray_data = tray_data or {}
+        ams_unit_id = tray_data.get('ams_unit_id')
+        ams_type_label = tray_data.get('ams_type', '') or ''
 
         if filament.remaining_percent != remain_percent:
             filament.remaining_percent = remain_percent
@@ -400,10 +431,19 @@ class Command(BaseCommand):
             if self.verbose:
                 logger.debug(f"Updated filament {filament}: {remain_percent}%")
 
-        if not filament.is_loaded_in_ams or filament.current_tray_id != tray_id:
-            previous_filament = Filament.objects.filter(
+        location_changed = (
+            not filament.is_loaded_in_ams
+            or filament.current_tray_id != tray_id
+            or (ams_unit_id is not None and filament.ams_unit_id != ams_unit_id)
+        )
+        if location_changed:
+            # Unload anything previously occupying THIS exact (unit, tray) slot.
+            unload_qs = Filament.objects.filter(
                 is_loaded_in_ams=True, current_tray_id=tray_id
-            ).exclude(id=filament.id).first()
+            ).exclude(id=filament.id)
+            if ams_unit_id is not None:
+                unload_qs = unload_qs.filter(ams_unit_id=ams_unit_id)
+            previous_filament = unload_qs.first()
 
             if previous_filament:
                 previous_filament.is_loaded_in_ams = False
@@ -411,14 +451,21 @@ class Command(BaseCommand):
                 previous_filament.save()
                 logger.info(
                     f"Auto-unloaded {previous_filament} from Tray {tray_id} "
-                    f"(replaced by {filament.brand} {filament.type} - {filament.color})"
+                    f"(unit {ams_unit_id}; replaced by {filament.brand} {filament.type} - {filament.color})"
                 )
 
             filament.is_loaded_in_ams = True
             filament.current_tray_id = tray_id
+            if ams_unit_id is not None:
+                filament.ams_unit_id = ams_unit_id
+            if ams_type_label:
+                filament.ams_type = ams_type_label
             filament.last_loaded_date = timezone.now()
             if self.verbose:
-                logger.debug(f"Updated filament location: Tray {tray_id}")
+                logger.debug(f"Updated filament location: unit={ams_unit_id} tray={tray_id}")
+        elif ams_type_label and filament.ams_type != ams_type_label:
+            # Same slot but ams_type was previously unknown — fill it in.
+            filament.ams_type = ams_type_label
 
         filament.save()
 
@@ -439,10 +486,13 @@ class Command(BaseCommand):
             if filament:
                 remain_percent = tray_data.get('remain_percent')
                 if remain_percent is not None:
-                    self._update_filament_status(filament, tray_id, remain_percent)
+                    self._update_filament_status(filament, tray_id, remain_percent, tray_data)
 
-            unit_id = str(int(tray_id) // 4) if tray_id.isdigit() else None
-            unit_data = ams_units.get(unit_id, {})
+            # Locate the AMS unit this tray belongs to. Use the unit_id supplied
+            # by the snapshot directly (matches MQTT ams[i].id, including 128 for AMS HT)
+            # — the legacy `tray_id // 4` math breaks for AMS HT.
+            unit_id_int = tray_data.get('ams_unit_id')
+            unit_data = ams_units.get(str(unit_id_int)) if unit_id_int is not None else {}
 
             FilamentSnapshot.objects.create(
                 printer_metric=printer_metric,
@@ -595,6 +645,10 @@ class Command(BaseCommand):
                     chamber_temp=self._to_decimal(snapshot.get("chamber_temp")),
                     nozzle_diameter=self._to_decimal(snapshot.get("nozzle_diameter")),
                     nozzle_type=snapshot.get("nozzle_type"),
+                    nozzle_temp_left=self._to_decimal(snapshot.get("nozzle_temp_left")),
+                    nozzle_target_temp_left=self._to_decimal(snapshot.get("nozzle_target_temp_left")),
+                    nozzle_diameter_left=self._to_decimal(snapshot.get("nozzle_diameter_left")),
+                    nozzle_type_left=snapshot.get("nozzle_type_left"),
                     gcode_state=snapshot.get("gcode_state"),
                     print_type=snapshot.get("print_type"),
                     print_percent=snapshot.get("print_percent"),

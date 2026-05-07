@@ -335,9 +335,15 @@ class PrinterState:
     wifi_signal: str = ""
     wifi_signal_dbm: int = 0
 
-    # Nozzle info
+    # Nozzle info — single-nozzle / right-side back-compat fields.
     nozzle_diameter: float = 0.4
     nozzle_type: str = ""
+
+    # H2C dual-nozzle: left-side fields (None on single-nozzle printers).
+    nozzle_temp_left: Optional[float] = None
+    nozzle_target_temp_left: Optional[float] = None
+    nozzle_diameter_left: Optional[float] = None
+    nozzle_type_left: Optional[str] = None
 
     # System status
     home_flag: int = 0
@@ -410,6 +416,21 @@ class PrinterState:
 
         wifi_signal = print_data.get("wifi_signal", "")
 
+        # H2C dual-nozzle decoding. The H2C reports per-extruder temperatures
+        # under `print.device.extruder.info[]` as a 2-element array (index 0 =
+        # right, index 1 = left). The `temp` field is bit-packed:
+        # `temp_raw = (target << 16) | current`, both °C as ints.
+        nozzle_temp_left = None
+        nozzle_target_temp_left = None
+        device = print_data.get("device") or {}
+        extruders = (device.get("extruder") or {}).get("info") or []
+        if len(extruders) >= 2:
+            left = extruders[1]
+            t = left.get("temp")
+            if isinstance(t, int):
+                nozzle_target_temp_left = float((t >> 16) & 0xFFFF)
+                nozzle_temp_left = float(t & 0xFFFF)
+
         return cls(
             timestamp=timestamp,
             sequence_id=str(print_data.get("sequence_id", "")),
@@ -438,6 +459,13 @@ class PrinterState:
             wifi_signal_dbm=cls._parse_wifi_signal(wifi_signal),
             nozzle_diameter=float(print_data.get("nozzle_diameter", 0.4)),
             nozzle_type=print_data.get("nozzle_type", ""),
+            nozzle_temp_left=nozzle_temp_left,
+            nozzle_target_temp_left=nozzle_target_temp_left,
+            # Diameter/type per side: H2C currently uses uniform nozzles, so reuse top-level
+            # values. If a future probe shows per-side diameter/type variance, plumb it from
+            # `device.nozzle.info[]` cross-referenced against `device.extruder.info[i].id`.
+            nozzle_diameter_left=float(print_data.get("nozzle_diameter", 0.4)) if nozzle_temp_left is not None else None,
+            nozzle_type_left=print_data.get("nozzle_type", "") if nozzle_temp_left is not None else None,
             home_flag=int(print_data.get("home_flag", 0)),
             hw_switch_state=int(print_data.get("hw_switch_state", 0)),
             mc_print_stage=str(print_data.get("mc_print_stage", "")),
@@ -473,6 +501,14 @@ class PrinterState:
             "chamber_temp": round(self.chamber_temp, 2),
             "nozzle_diameter": self.nozzle_diameter,
             "nozzle_type": self.nozzle_type,
+            "nozzle_temp_left": (
+                round(self.nozzle_temp_left, 2) if self.nozzle_temp_left is not None else None
+            ),
+            "nozzle_target_temp_left": (
+                round(self.nozzle_target_temp_left, 2) if self.nozzle_target_temp_left is not None else None
+            ),
+            "nozzle_diameter_left": self.nozzle_diameter_left,
+            "nozzle_type_left": self.nozzle_type_left,
             "gcode_state": self.gcode_state,
             "print_type": self.print_type,
             "print_percent": self.print_percent,
@@ -515,8 +551,19 @@ class PrinterState:
             snapshot["tray_now"] = self.ams.tray_now
             snapshot["ams_version"] = self.ams.version
 
+            from .models import ams_type_from_info
+
             filaments = []
             for unit in self.ams.units:
+                # `unit_id` is the AMS unit's own id from the MQTT payload — for the
+                # original AMS / AMS 2 Pro it's a small int (0,1,2,...); for AMS HT
+                # it has the 0x80 bit set (e.g. 128). Don't compute tray_id // 4 —
+                # multi-AMS-type setups are not contiguous.
+                try:
+                    unit_id_int = int(unit.unit_id)
+                except (TypeError, ValueError):
+                    unit_id_int = None
+                ams_type_label = ams_type_from_info(unit.info)
                 for tray in unit.trays:
                     if tray.tray_type:
                         filaments.append({
@@ -542,6 +589,9 @@ class PrinterState:
                             "tray_bed_temp": tray.tray_bed_temp,
                             "bed_temp_type": tray.bed_temp_type,
                             "cols": tray.cols,
+                            "ams_unit_id": unit_id_int,
+                            "ams_info": unit.info,
+                            "ams_type": ams_type_label,
                         })
             snapshot["filaments"] = filaments
 
@@ -552,6 +602,7 @@ class PrinterState:
                     "ams_id": unit.ams_id,
                     "chip_id": unit.chip_id,
                     "info": unit.info,
+                    "ams_type": ams_type_from_info(unit.info),
                     "humidity": unit.humidity,
                     "humidity_raw": unit.humidity_raw,
                     "temp": unit.temp,

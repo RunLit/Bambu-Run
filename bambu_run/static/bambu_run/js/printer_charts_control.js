@@ -200,6 +200,13 @@ function updateAllPrinterCharts(data) {
         { data: data.nozzle_target_temp, datasetIndex: 1 }
     ]);
 
+    if (typeof nozzleTempLeftChart !== 'undefined' && nozzleTempLeftChart) {
+        updateChartData(nozzleTempLeftChart, data.timestamps, [
+            { data: data.nozzle_temp_left || [], datasetIndex: 0 },
+            { data: data.nozzle_target_temp_left || [], datasetIndex: 1 }
+        ]);
+    }
+
     updateChartData(bedTempChart, data.timestamps, [
         { data: data.bed_temp, datasetIndex: 0 },
         { data: data.bed_target_temp, datasetIndex: 1 }
@@ -269,7 +276,7 @@ function addProjectMarkersToCharts(markers, timestamps) {
     console.log('Adding project markers:', markers);
 
     const charts = [
-        nozzleTempChart, bedTempChart, printProgressChart, fanSpeedsChart,
+        nozzleTempChart, nozzleTempLeftChart, bedTempChart, printProgressChart, fanSpeedsChart,
         wifiSignalChart, amsConditionsChart, layerProgressChart, filamentTimelineChart
     ];
 
@@ -400,7 +407,7 @@ function resetPrinterControls() {
 
     // Clear annotations and reload with original data
     const charts = [
-        nozzleTempChart, bedTempChart, printProgressChart, fanSpeedsChart,
+        nozzleTempChart, nozzleTempLeftChart, bedTempChart, printProgressChart, fanSpeedsChart,
         wifiSignalChart, amsConditionsChart, layerProgressChart, filamentTimelineChart
     ];
 

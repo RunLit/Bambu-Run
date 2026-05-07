@@ -76,6 +76,14 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
                 float(m.nozzle_target_temp) if m.nozzle_target_temp else None
                 for m in metrics
             ],
+            "nozzle_temp_left": [
+                float(m.nozzle_temp_left) if m.nozzle_temp_left is not None else None
+                for m in metrics
+            ],
+            "nozzle_target_temp_left": [
+                float(m.nozzle_target_temp_left) if m.nozzle_target_temp_left is not None else None
+                for m in metrics
+            ],
             "bed_temp": [float(m.bed_temp) if m.bed_temp else None for m in metrics],
             "bed_target_temp": [
                 float(m.bed_target_temp) if m.bed_target_temp else None for m in metrics
@@ -150,6 +158,14 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
 
             stats = {
                 "nozzle_temp": float(latest_metric.nozzle_temp) if latest_metric.nozzle_temp else 0,
+                "nozzle_target_temp": float(latest_metric.nozzle_target_temp) if latest_metric.nozzle_target_temp else 0,
+                "nozzle_diameter": float(latest_metric.nozzle_diameter) if latest_metric.nozzle_diameter else None,
+                "nozzle_type": latest_metric.nozzle_type or "",
+                "nozzle_temp_left": float(latest_metric.nozzle_temp_left) if latest_metric.nozzle_temp_left is not None else None,
+                "nozzle_target_temp_left": float(latest_metric.nozzle_target_temp_left) if latest_metric.nozzle_target_temp_left is not None else None,
+                "nozzle_diameter_left": float(latest_metric.nozzle_diameter_left) if latest_metric.nozzle_diameter_left is not None else None,
+                "nozzle_type_left": latest_metric.nozzle_type_left or "",
+                "is_dual_nozzle": latest_metric.nozzle_temp_left is not None,
                 "bed_temp": float(latest_metric.bed_temp) if latest_metric.bed_temp else 0,
                 "chamber_temp": float(latest_metric.chamber_temp) if latest_metric.chamber_temp else 0,
                 "print_percent": latest_metric.print_percent or 0,
@@ -347,6 +363,8 @@ class PrinterDataAPIView(LoginRequiredMixin, View):
             dates = []
             nozzle_temp = []
             nozzle_target_temp = []
+            nozzle_temp_left = []
+            nozzle_target_temp_left = []
             bed_temp = []
             bed_target_temp = []
             print_percent = []
@@ -374,6 +392,8 @@ class PrinterDataAPIView(LoginRequiredMixin, View):
                 dates.append(ts.strftime('%Y-%m-%d'))
                 nozzle_temp.append(float(m.nozzle_temp) if m.nozzle_temp else None)
                 nozzle_target_temp.append(float(m.nozzle_target_temp) if m.nozzle_target_temp else None)
+                nozzle_temp_left.append(float(m.nozzle_temp_left) if m.nozzle_temp_left is not None else None)
+                nozzle_target_temp_left.append(float(m.nozzle_target_temp_left) if m.nozzle_target_temp_left is not None else None)
                 bed_temp.append(float(m.bed_temp) if m.bed_temp else None)
                 bed_target_temp.append(float(m.bed_target_temp) if m.bed_target_temp else None)
                 print_percent.append(m.print_percent if m.print_percent else 0)
@@ -451,6 +471,8 @@ class PrinterDataAPIView(LoginRequiredMixin, View):
                 "dates": dates,
                 "nozzle_temp": nozzle_temp,
                 "nozzle_target_temp": nozzle_target_temp,
+                "nozzle_temp_left": nozzle_temp_left,
+                "nozzle_target_temp_left": nozzle_target_temp_left,
                 "bed_temp": bed_temp,
                 "bed_target_temp": bed_target_temp,
                 "print_percent": print_percent,
@@ -561,6 +583,10 @@ class FilamentListView(LoginRequiredMixin, ListView):
         elif loaded == 'no':
             queryset = queryset.filter(is_loaded_in_ams=False)
 
+        ams_type = self.request.GET.get('ams_type')
+        if ams_type:
+            queryset = queryset.filter(ams_type=ams_type)
+
         search = self.request.GET.get('search')
         if search:
             queryset = queryset.filter(
@@ -579,6 +605,11 @@ class FilamentListView(LoginRequiredMixin, ListView):
         context['low_filaments'] = Filament.objects.filter(remaining_percent__lt=20).count()
         context['filament_types'] = sorted(
             set(Filament.objects.exclude(type__isnull=True).exclude(type='').values_list('type', flat=True))
+        )
+        context['ams_type_choices'] = sorted(
+            set(
+                Filament.objects.exclude(ams_type='').values_list('ams_type', flat=True)
+            )
         )
         return context
 
