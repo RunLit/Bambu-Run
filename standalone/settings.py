@@ -111,6 +111,8 @@ PRINTER_IP = os.environ.get("PRINTER_IP", "")
 ACCESS_TOKEN = os.environ.get("ACCESS_TOKEN", "")
 PRINTER_SERIAL = os.environ.get("PRINTER_SERIAL", "")
 
+CSRF_TRUSTED_ORIGINS = os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
+
 # Logging
 LOGGING = {
     "version": 1,
