@@ -70,14 +70,22 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <select name="loaded" class="form-select">
                         <option value="">All Spools</option>
                         <option value="yes" {% if request.GET.loaded == 'yes' %}selected{% endif %}>Loaded in AMS</option>
                         <option value="no" {% if request.GET.loaded == 'no' %}selected{% endif %}>Not Loaded</option>
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
+                    <select name="ams_type" class="form-select">
+                        <option value="">All AMS Types</option>
+                        {% for at in ams_type_choices %}
+                        <option value="{{ at }}" {% if request.GET.ams_type == at %}selected{% endif %}>{{ at }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
                     <button type="submit" class="btn btn-secondary">Filter</button>
                     <a href="{% url 'bambu_run:filament_list' %}" class="btn btn-outline-secondary">Reset</a>
                 </div>
@@ -149,7 +157,11 @@
                             </td>
                             <td class="align-middle">
                                 {% if filament.is_loaded_in_ams %}
-                                    <span class="badge bg-success">AMS Tray {{ filament.current_tray_id }}</span>
+                                    <span class="badge bg-success">
+                                        {% if filament.ams_type %}{{ filament.ams_type }}{% else %}AMS{% endif %}
+                                        {% if filament.ams_unit_id is not None %}#{{ filament.ams_unit_id }}{% endif %}
+                                        · Tray {{ filament.current_tray_id }}
+                                    </span>
                                 {% else %}
                                     <span class="badge bg-secondary">Storage</span>
                                 {% endif %}
