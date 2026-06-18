@@ -529,6 +529,10 @@ class PrinterState:
             "wifi_signal_dbm": self.wifi_signal_dbm,
             "print_error": self.print_error,
             "has_errors": self.print_error != 0,
+            # Full `print.device` payload, unfiltered. H2C's Vortek rack (6 swappable
+            # hotends + 1 fixed left nozzle) isn't fully modeled yet — stash everything
+            # here so no data is lost once the real Vortek MQTT schema is confirmed.
+            "vortek_raw": self._raw_data.get("print", {}).get("device", {}),
             "hms": self.hms,
             "stg_cur": self.stg_cur,
             "lights_report": self.lights_report,

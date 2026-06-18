@@ -14,6 +14,19 @@
                 Real-time monitoring for {{ device_name }}
             </p>
         </div>
+        {% if show_printer_switcher %}
+        <div class="col-auto">
+            <select class="form-select" aria-label="Select printer"
+                    onchange="if (this.value) { window.location.href = this.value; }">
+                {% for p in all_printers %}
+                <option value="{% url 'bambu_run:printer_dashboard' pk=p.pk %}"
+                        {% if printer_device.pk == p.pk %}selected{% endif %}>
+                    {{ p.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
     </div>
 
     {% if error %}
@@ -423,12 +436,12 @@
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1"></script>
 <script src="{% static 'bambu_run/js/printer_charts.js' %}"></script>
 <script src="{% static 'bambu_run/js/printer_charts_control.js' %}"></script>
-{% if not is_basic_user %}
-<div id="printerApiUrl" data-url="{% url 'bambu_run:printer_api' %}" style="display: none;"></div>
+{% if not is_basic_user and printer_device %}
+<div id="printerApiUrl" data-url="{% url 'bambu_run:printer_api' pk=printer_device.pk %}" style="display: none;"></div>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const printerData = {{ printer_data_json|safe }};
-        const apiUrl = '{% url "bambu_run:printer_api" %}';
+        const apiUrl = '{% url "bambu_run:printer_api" pk=printer_device.pk %}';
         initPrinterCharts(printerData, apiUrl);
 
         // Add project markers if they exist

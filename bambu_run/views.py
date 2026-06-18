@@ -1,8 +1,9 @@
 from datetime import timedelta, datetime
 from django.views.generic import TemplateView, View, ListView, CreateView, UpdateView, DetailView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db.models import Q, Sum
@@ -26,6 +27,17 @@ _METRICS_API_FIELDS = [
 _MAX_CHART_POINTS = 3000
 
 
+def resolve_printer_from_request(pk):
+    """Resolve which Printer a dashboard/API view should show.
+
+    `pk` given (URL kwarg) -> that exact printer, 404 if missing/inactive.
+    `pk` omitted -> first active printer (today's single-printer default behavior).
+    """
+    if pk is not None:
+        return get_object_or_404(Printer, pk=pk, is_active=True)
+    return Printer.objects.filter(is_active=True).first()
+
+
 class PrinterDashboardView(LoginRequiredMixin, TemplateView):
     template_name = "bambu_run/printer_dashboard.html"
 
@@ -38,13 +50,19 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         context['bambu_run_base_template'] = app_settings.BASE_TEMPLATE
 
+        all_printers = Printer.objects.filter(is_active=True)
+        context["all_printers"] = all_printers
+        context["show_printer_switcher"] = all_printers.count() > 1
+
         try:
-            printer_device = Printer.objects.filter(is_active=True).first()
+            printer_device = resolve_printer_from_request(self.kwargs.get("pk"))
             if not printer_device:
                 context["error"] = (
                     "No 3D printer device found. Please run bambu_collector first."
                 )
                 return context
+        except Http404:
+            raise
         except Exception as e:
             context["error"] = f"Error loading printer device: {str(e)}"
             return context
@@ -304,16 +322,21 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
 class PrinterDataAPIView(LoginRequiredMixin, View):
     """API endpoint for dynamic printer chart updates"""
 
-    def get(self, request):
+    def get(self, request, pk=None):
         start_date = request.GET.get("start_date")
         end_date = request.GET.get("end_date")
         start_time = request.GET.get("start_time", "00:00")
         end_time = request.GET.get("end_time", "23:59")
 
         try:
-            printer_device = Printer.objects.filter(is_active=True).first()
-            if not printer_device:
-                return JsonResponse({"error": "No printer device found"}, status=404)
+            if pk is not None:
+                printer_device = Printer.objects.filter(pk=pk, is_active=True).first()
+                if not printer_device:
+                    return JsonResponse({"error": "Printer not found"}, status=404)
+            else:
+                printer_device = Printer.objects.filter(is_active=True).first()
+                if not printer_device:
+                    return JsonResponse({"error": "No printer device found"}, status=404)
 
             tz = zoneinfo.ZoneInfo(app_settings.TIMEZONE)
 

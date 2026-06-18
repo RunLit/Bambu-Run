@@ -5,7 +5,9 @@ app_name = "bambu_run"
 
 urlpatterns = [
     path("", views.PrinterDashboardView.as_view(), name="printer_dashboard"),
+    path("printer/<int:pk>/", views.PrinterDashboardView.as_view(), name="printer_dashboard"),
     path("api/printer/", views.PrinterDataAPIView.as_view(), name="printer_api"),
+    path("api/printer/<int:pk>/", views.PrinterDataAPIView.as_view(), name="printer_api"),
 
     # Filament Inventory routes
     path("filaments/", views.FilamentListView.as_view(), name="filament_list"),

@@ -231,6 +231,14 @@ class PrinterMetrics(models.Model):
         default=list, help_text="Light status report [{node, mode}]"
     )
 
+    # Groundwork for H2C's Vortek nozzle-changer rack (6 swappable hotends + 1 fixed
+    # left nozzle) — the full MQTT schema for per-slot state isn't confirmed yet, so
+    # the raw `print.device` payload is captured here unfiltered to avoid losing data
+    # ahead of proper per-slot modeling.
+    vortek_raw = models.JSONField(
+        default=dict, blank=True, help_text="Raw print.device MQTT payload (Vortek rack groundwork)"
+    )
+
     class Meta:
         db_table = "infrastructure_printer_metrics"
         verbose_name = "Printer Metric"
