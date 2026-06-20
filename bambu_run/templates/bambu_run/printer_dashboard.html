@@ -15,8 +15,9 @@
             </p>
         </div>
         {% if show_printer_switcher %}
-        <div class="col-auto">
-            <select class="form-select" aria-label="Select printer"
+        <div class="col-auto d-flex align-items-center gap-2">
+            <label for="printerSwitcher" class="form-label mb-0 text-nowrap">Device:</label>
+            <select id="printerSwitcher" class="form-select" aria-label="Select printer"
                     onchange="if (this.value) { window.location.href = this.value; }">
                 {% for p in all_printers %}
                 <option value="{% url 'bambu_run:printer_dashboard' pk=p.pk %}"

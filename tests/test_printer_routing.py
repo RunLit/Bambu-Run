@@ -26,6 +26,15 @@ def test_dashboard_defaults_to_first_active_printer(logged_in_client):
 
     assert resp.context["printer_device"].pk == printer.pk
     assert list(resp.context["all_printers"]) == [printer]
+    # Switcher shows even with a single printer, as a hint that multi-printer exists.
+    assert resp.context["show_printer_switcher"] is True
+
+
+@pytest.mark.django_db
+def test_dashboard_hides_switcher_with_zero_printers(logged_in_client):
+    resp = logged_in_client.get(reverse("bambu_run:printer_dashboard"))
+
+    assert resp.context["show_printer_switcher"] is False
 
 
 @pytest.mark.django_db

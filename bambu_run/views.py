@@ -52,7 +52,8 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
 
         all_printers = Printer.objects.filter(is_active=True)
         context["all_printers"] = all_printers
-        context["show_printer_switcher"] = all_printers.count() > 1
+        # Shown even with a single printer — hints that multi-printer support exists.
+        context["show_printer_switcher"] = all_printers.exists()
 
         try:
             printer_device = resolve_printer_from_request(self.kwargs.get("pk"))
