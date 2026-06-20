@@ -242,6 +242,15 @@ class PrinterMetrics(models.Model):
         default=dict, blank=True, help_text="Raw print.device MQTT payload (Vortek rack groundwork)"
     )
 
+    # Parsed device.nozzle.info[] from this poll, one dict per entry (mirrors
+    # HotendInfo.to_dict()). Includes induction-chip hotends *and* non-inductive
+    # nozzle positions (e.g. H2C's fixed left nozzle) that have no stable serial
+    # number to key a Hotend registry row on — kept here so the dashboard can show
+    # their readable type/diameter without claiming an identity/history we don't have.
+    nozzle_info = models.JSONField(
+        default=list, blank=True, help_text="Parsed per-poll nozzle/hotend info list"
+    )
+
     class Meta:
         db_table = "infrastructure_printer_metrics"
         verbose_name = "Printer Metric"
@@ -740,3 +749,108 @@ class FilamentUsage(models.Model):
                 self.consumed_grams = int(
                     self.filament.initial_weight_grams * (self.consumed_percent / 100.0)
                 )
+
+
+class Hotend(models.Model):
+    """Registry of individual Vortek hotends, keyed by serial number.
+
+    A Vortek rack holds up to 6 swappable hotends (bays, MQTT `id` 16-21) plus
+    1 mounted on the toolhead at a time (MQTT `id` 0). `raw_id` reflects whichever
+    address was last seen on the wire for this hotend; `slot_number` is only set
+    when that address falls in the 16-21 rack-bay range — confirmed by watching
+    a "Read All" MQTT capture reassign a toolhead-mounted hotend's id from 0 to
+    its true bay id.
+    """
+
+    printer = models.ForeignKey(
+        'Printer', on_delete=models.CASCADE, related_name='hotends'
+    )
+    serial_number = models.CharField(max_length=100, db_index=True)
+
+    nozzle_type = models.CharField(max_length=50, blank=True, default="")
+    diameter = models.DecimalField(
+        max_digits=3, decimal_places=2, null=True, blank=True
+    )
+
+    raw_id = models.PositiveSmallIntegerField(
+        help_text="Last-seen MQTT device.nozzle.info[].id"
+    )
+    slot_number = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        help_text="Rack bay 1-6, derived from raw_id 16-21. Null if currently unknown (e.g. mounted on toolhead and id reports as the 0 sentinel)."
+    )
+    is_toolhead = models.BooleanField(
+        default=False,
+        help_text="True if currently mounted on the toolhead under normal polling (raw_id == 0)."
+    )
+
+    last_filament_profile_id = models.CharField(
+        max_length=20, blank=True, default="",
+        help_text="Bambu material profile id of the filament last loaded (MQTT fila_id, e.g. 'GFA01')"
+    )
+    last_color = models.CharField(
+        max_length=6, blank=True, default="",
+        help_text="6-char hex of the filament last loaded (MQTT color_m, alpha stripped)"
+    )
+
+    used_time_seconds = models.PositiveIntegerField(default=0)
+    wear_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0,
+        help_text="MQTT wear (0-128 scale) converted to a 0-100 percent"
+    )
+
+    last_seen_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "infrastructure_hotend"
+        verbose_name = "Hotend"
+        verbose_name_plural = "Hotends"
+        ordering = ['printer', '-is_toolhead', 'slot_number', 'serial_number']
+        unique_together = [['printer', 'serial_number']]
+
+    def __str__(self):
+        location = "Toolhead" if self.is_toolhead else (
+            f"Slot {self.slot_number}" if self.slot_number else "Rack"
+        )
+        return f"{self.serial_number} ({location})"
+
+    @property
+    def used_time_display(self) -> str:
+        hours, remainder = divmod(self.used_time_seconds, 3600)
+        minutes = remainder // 60
+        return f"{hours}h {minutes}m" if hours else f"{minutes}m"
+
+
+class HotendSnapshot(models.Model):
+    """Point-in-time reading of a Hotend, one row per collector poll."""
+
+    printer_metric = models.ForeignKey(
+        'PrinterMetrics', on_delete=models.CASCADE,
+        related_name='hotend_snapshots'
+    )
+    hotend = models.ForeignKey(
+        'Hotend', on_delete=models.CASCADE,
+        related_name='snapshots'
+    )
+
+    raw_id = models.PositiveSmallIntegerField()
+    used_time_seconds = models.PositiveIntegerField(default=0)
+    wear_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    stat = models.IntegerField(
+        null=True, blank=True, help_text="Raw MQTT status code for this hotend"
+    )
+    timestamp = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        db_table = "infrastructure_hotend_snapshot"
+        verbose_name = "Hotend Snapshot"
+        verbose_name_plural = "Hotend Snapshots"
+        ordering = ['printer_metric', 'hotend']
+        indexes = [
+            models.Index(fields=['printer_metric', 'hotend']),
+            models.Index(fields=['hotend', '-timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.hotend.serial_number} @ {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"

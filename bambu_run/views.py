@@ -11,7 +11,7 @@ import json
 import zoneinfo
 
 from .conf import app_settings
-from .models import Printer, PrinterMetrics, Filament, FilamentColor, FilamentType, FilamentSnapshot, PrintJob, FilamentUsage
+from .models import Printer, PrinterMetrics, Filament, FilamentColor, FilamentType, FilamentSnapshot, PrintJob, FilamentUsage, Hotend
 from .forms import FilamentForm, FilamentColorForm, FilamentTypeForm
 
 _METRICS_API_FIELDS = [
@@ -231,6 +231,19 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
                 "filaments": filaments_list,
                 "ams_units": ams_units_list,
                 "ams_groups": ams_groups,
+                "hotends": list(
+                    Hotend.objects.filter(printer=printer_device)
+                    .order_by('-is_toolhead', 'slot_number', 'serial_number')
+                ),
+                # Nozzle positions with no induction chip (no stable serial number to
+                # key a Hotend registry row on, e.g. H2C's fixed left nozzle) — shown
+                # read-only from the latest poll, not persisted/historical. Entries with
+                # no readable type/diameter at all (i.e. genuinely nothing there) are
+                # dropped rather than shown as an empty placeholder.
+                "nozzle_positions": [
+                    h for h in (latest_metric.nozzle_info or [])
+                    if h.get('is_empty') and (h.get('nozzle_type') or h.get('diameter'))
+                ],
                 "external_spool": latest_metric.external_spool or {},
                 "timestamp": latest_metric.timestamp.astimezone(tz).strftime("%Y-%m-%d %H:%M:%S"),
             }

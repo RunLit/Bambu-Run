@@ -571,6 +571,38 @@ class Command(BaseCommand):
                 match_method=match_method
             )
 
+    def _update_hotends(self, printer, printer_metric, hotends_data):
+        from bambu_run.models import Hotend, HotendSnapshot
+
+        for h in hotends_data:
+            if h.get("is_empty"):
+                continue
+
+            hotend, _ = Hotend.objects.update_or_create(
+                printer=printer,
+                serial_number=h.get("serial_number"),
+                defaults={
+                    "raw_id": h.get("raw_id", 0),
+                    "nozzle_type": h.get("nozzle_type", ""),
+                    "diameter": self._to_decimal(h.get("diameter")),
+                    "slot_number": h.get("slot_number"),
+                    "is_toolhead": bool(h.get("is_toolhead")),
+                    "last_filament_profile_id": h.get("fila_id", ""),
+                    "last_color": h.get("color") or "",
+                    "used_time_seconds": h.get("used_time_seconds", 0),
+                    "wear_percent": h.get("wear_percent", 0),
+                },
+            )
+
+            HotendSnapshot.objects.create(
+                printer_metric=printer_metric,
+                hotend=hotend,
+                raw_id=h.get("raw_id", 0),
+                used_time_seconds=h.get("used_time_seconds", 0),
+                wear_percent=h.get("wear_percent", 0),
+                stat=h.get("stat"),
+            )
+
     def _track_print_job(self, session, metric, snapshot):
         from bambu_run.models import PrintJob
 
@@ -757,11 +789,16 @@ class Command(BaseCommand):
                     external_spool=snapshot.get("external_spool", {}),
                     lights_report=snapshot.get("lights_report", []),
                     vortek_raw=snapshot.get("vortek_raw", {}),
+                    nozzle_info=snapshot.get("hotends", []),
                 )
 
                 filaments_data = snapshot.get('filaments', [])
                 if filaments_data:
                     self._create_filament_snapshots(metric, filaments_data, snapshot)
+
+                hotends_data = snapshot.get('hotends', [])
+                if hotends_data:
+                    self._update_hotends(session.printer, metric, hotends_data)
 
                 self._track_print_job(session, metric, snapshot)
 

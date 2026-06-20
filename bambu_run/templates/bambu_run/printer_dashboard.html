@@ -282,6 +282,64 @@
         </div>
     </div>
 
+    <!-- Hotends Section (Vortek rack + any plain/non-inductive nozzles) -->
+    {% if stats.hotends or stats.nozzle_positions %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Hotends</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        {% for hotend in stats.hotends %}
+                        <div class="col-12 col-md-6 col-lg-3">
+                            <div class="card filament-card" data-filament-color="{{ hotend.last_color|default:'888888' }}">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h6 class="mb-0">
+                                            {% if hotend.is_toolhead %}Toolhead{% elif hotend.slot_number %}Slot {{ hotend.slot_number }}{% else %}Rack{% endif %}
+                                        </h6>
+                                        {% if hotend.is_toolhead %}<span class="badge filament-badge">Toolhead</span>{% endif %}
+                                    </div>
+                                    <p class="mb-1 small text-body-secondary">SN {{ hotend.serial_number }}</p>
+                                    <p class="mb-1 small"><strong>{{ hotend.nozzle_type }}</strong>{% if hotend.diameter %} &middot; {{ hotend.diameter }}mm{% endif %}</p>
+                                    {% if hotend.last_filament_profile_id %}<p class="mb-1 small text-body-secondary">Last: {{ hotend.last_filament_profile_id }}</p>{% endif %}
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="small">Used time</span>
+                                        <span class="small">{{ hotend.used_time_display }}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="small">Wear</span>
+                                        <span class="badge filament-badge">{{ hotend.wear_percent|floatformat:0 }}%</span>
+                                    </div>
+                                    <div class="progress" style="height: 10px; background-color: rgba(0,0,0,0.1);">
+                                        <div class="progress-bar filament-progress" role="progressbar" style="width: {{ hotend.wear_percent }}%;" aria-valuenow="{{ hotend.wear_percent }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% for nozzle in stats.nozzle_positions %}
+                        <div class="col-12 col-md-6 col-lg-3">
+                            <div class="card">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h6 class="mb-0">{% if nozzle.is_toolhead %}Toolhead{% else %}Fixed Nozzle{% endif %}</h6>
+                                    </div>
+                                    <p class="mb-1 small"><strong>{{ nozzle.nozzle_type }}</strong>{% if nozzle.diameter %} &middot; {{ nozzle.diameter }}mm{% endif %}</p>
+                                    <p class="mb-0 small text-body-secondary">No induction chip data</p>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Date/Time Filter Controls -->
     {% if not is_basic_user %}
     <div class="row mb-4">
