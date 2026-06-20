@@ -148,6 +148,8 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
                         'brand': snapshot.sub_type or 'Unknown',
                         'color': snapshot.color or 'FFFFFFFF',
                         'remain_percent': snapshot.remain_percent or 0,
+                        'ams_unit_id': snapshot.ams_unit_id,
+                        'ams_type': snapshot.ams_type or '',
                     }
                     if snapshot.filament:
                         filament_dict['color_name'] = snapshot.filament.color
@@ -156,6 +158,37 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
                     filaments_list.append(filament_dict)
             except Exception:
                 filaments_list = []
+
+            # Distinct AMS units represented in this snapshot, for the unit
+            # filter/badges in the template. Sort numeric unit ids first
+            # (AMS / AMS 2 Pro), HT (id 128 / bit 0x80 set) last.
+            seen_units = {}
+            for f in filaments_list:
+                uid = f.get('ams_unit_id')
+                if uid is not None and uid not in seen_units:
+                    seen_units[uid] = f.get('ams_type') or ''
+            ams_units_list = [
+                {'ams_unit_id': uid, 'ams_type': label}
+                for uid, label in sorted(seen_units.items())
+            ]
+
+            # Group trays by physical AMS unit for the panel-style dashboard layout —
+            # one tinted panel per unit, full-width for multi-slot units (AMS/AMS 2 Pro),
+            # compact for single-slot units (AMS HT) so several can flow side-by-side.
+            units_meta = {
+                u.get('unit_id'): u for u in (latest_metric.ams_units or [])
+            }
+            ams_groups = []
+            for uid, label in sorted(seen_units.items()):
+                unit_meta = units_meta.get(str(uid), {})
+                ams_groups.append({
+                    'unit_id': uid,
+                    'ams_type': label,
+                    'label': f"{label or 'AMS'} (Unit {uid})",
+                    'humidity': unit_meta.get('humidity'),
+                    'temp': unit_meta.get('temp'),
+                    'filaments': [f for f in filaments_list if f.get('ams_unit_id') == uid],
+                })
 
             subtask_name = latest_metric.subtask_name or "No active print"
             # Look up active PrintJob for a better display name (cloud design_title)
@@ -196,6 +229,8 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
                 "ams_temp": float(latest_metric.ams_temp) if latest_metric.ams_temp else None,
                 "ams_humidity": latest_metric.ams_humidity,
                 "filaments": filaments_list,
+                "ams_units": ams_units_list,
+                "ams_groups": ams_groups,
                 "external_spool": latest_metric.external_spool or {},
                 "timestamp": latest_metric.timestamp.astimezone(tz).strftime("%Y-%m-%d %H:%M:%S"),
             }
@@ -278,15 +313,19 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
 
             for snapshot in snapshots:
                 tray_id = snapshot.tray_id
+                ams_unit_id = snapshot.ams_unit_id
+                ams_type = snapshot.ams_type or ''
                 fil_type = snapshot.type or 'Unknown'
                 fil_sub_type = snapshot.sub_type or 'Unknown'
                 fil_color = snapshot.color or 'FFFFFFFF'
 
-                unique_key = f"{tray_id}_{fil_type}_{fil_sub_type}_{fil_color}"
+                unique_key = f"{ams_unit_id}_{tray_id}_{fil_type}_{fil_sub_type}_{fil_color}"
 
                 if unique_key not in filament_data:
                     filament_data[unique_key] = {
                         'tray_id': tray_id,
+                        'ams_unit_id': ams_unit_id,
+                        'ams_type': ams_type,
                         'type': fil_type,
                         'brand': fil_sub_type,
                         'color': fil_color,

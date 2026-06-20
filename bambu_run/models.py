@@ -21,12 +21,15 @@ AMS_TYPE_CHOICES = [
 def ams_type_from_info(info_code) -> str:
     """Resolve an AMS unit's `info` model code to a human label.
 
-    The HT unit reports its `id` with the 0x80 bit set (e.g. 128) — when the info
-    code is unknown, that bit is a reasonable secondary hint for HT identification.
+    Real MQTT `info` codes are 8 characters (e.g. "10001003") with the type encoded
+    in the last 4 digits — confirmed against a live H2C with AMS 2 Pro / AMS / AMS HT.
+    Fall back to an exact match for the bare 4-digit form in case other firmware
+    reports it short.
     """
-    if info_code is None:
+    if not info_code:
         return ""
-    return AMS_INFO_TO_TYPE.get(str(info_code), "")
+    code = str(info_code)
+    return AMS_INFO_TO_TYPE.get(code[-4:], "") or AMS_INFO_TO_TYPE.get(code, "")
 
 
 class Printer(models.Model):
@@ -498,6 +501,15 @@ class FilamentSnapshot(models.Model):
         max_length=20, null=True, blank=True,
         help_text="Slot identifier like A00-W1"
     )
+    ams_unit_id = models.PositiveSmallIntegerField(
+        null=True, blank=True, db_index=True,
+        help_text="Which physical AMS unit this tray belongs to (matches MQTT ams[i].id; 128 = AMS HT)"
+    )
+    ams_type = models.CharField(
+        max_length=32, blank=True, default="",
+        choices=AMS_TYPE_CHOICES,
+        help_text="Type of the AMS unit this tray belongs to (AMS / AMS 2 Pro / AMS HT)"
+    )
 
     type = models.CharField(max_length=50, null=True, blank=True)
     sub_type = models.CharField(
@@ -545,9 +557,10 @@ class FilamentSnapshot(models.Model):
         db_table = "infrastructure_filament_snapshot"
         verbose_name = "Filament Snapshot"
         verbose_name_plural = "Filament Snapshots"
-        ordering = ['printer_metric', 'tray_id']
+        ordering = ['printer_metric', 'ams_unit_id', 'tray_id']
         indexes = [
             models.Index(fields=['printer_metric', 'tray_id']),
+            models.Index(fields=['printer_metric', 'ams_unit_id', 'tray_id']),
             models.Index(fields=['filament']),
         ]
 
@@ -686,6 +699,10 @@ class FilamentUsage(models.Model):
     )
 
     tray_id = models.IntegerField(help_text="Which AMS slot was used")
+    ams_unit_id = models.PositiveSmallIntegerField(
+        null=True, blank=True, db_index=True,
+        help_text="Which physical AMS unit the slot belongs to (matches MQTT ams[i].id; 128 = AMS HT)"
+    )
 
     starting_percent = models.IntegerField(help_text="Filament remaining % at job start")
     ending_percent = models.IntegerField(

@@ -37,32 +37,38 @@
     <!-- Summary Cards Row -->
     <div class="row g-3 mb-4">
         {% if stats.is_dual_nozzle %}
-        <!-- Right Nozzle (dual-nozzle printers, e.g. H2C) -->
+        <!-- Left Nozzle (dual-nozzle printers, e.g. H2C) -->
         <div class="col-12 col-md-6 col-lg-3">
-            <div class="card infra-card-warning">
+            <div class="card infra-card-warning h-100">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
-                            <div class="stat-label">Right Nozzle</div>
-                            <div class="stat-value">{{ stats.nozzle_temp|floatformat:1 }}&deg;C</div>
-                            <div class="text-muted small">target {{ stats.nozzle_target_temp|floatformat:0 }}&deg;C
-                                {% if stats.nozzle_type %}· {{ stats.nozzle_type }}{% endif %}</div>
+                            <div class="stat-label d-flex align-items-center gap-1">
+                                <svg class="icon" style="width: 1.25rem; height: 1.25rem;"><use href="{% static 'bambu_run/vendors/coreui-icons-free.svg' %}#cil-arrow-thick-left"></use></svg>
+                                Left Nozzle
+                            </div>
+                            <div class="stat-value">{{ stats.nozzle_temp_left|floatformat:1 }}&deg;C</div>
+                            <div class="text-muted small">target {{ stats.nozzle_target_temp_left|floatformat:0 }}&deg;C
+                                {% if stats.nozzle_type_left %}· Nozzle {{ stats.nozzle_type_left }}{% endif %}</div>
                         </div>
                         <i class="bi bi-thermometer-high" style="font-size: 2rem; opacity: 0.3;"></i>
                     </div>
                 </div>
             </div>
         </div>
-        <!-- Left Nozzle -->
+        <!-- Right Nozzle -->
         <div class="col-12 col-md-6 col-lg-3">
-            <div class="card infra-card-warning">
+            <div class="card infra-card-warning h-100">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
-                            <div class="stat-label">Left Nozzle</div>
-                            <div class="stat-value">{{ stats.nozzle_temp_left|floatformat:1 }}&deg;C</div>
-                            <div class="text-muted small">target {{ stats.nozzle_target_temp_left|floatformat:0 }}&deg;C
-                                {% if stats.nozzle_type_left %}· {{ stats.nozzle_type_left }}{% endif %}</div>
+                            <div class="stat-label d-flex align-items-center gap-1">
+                                Right Nozzle
+                                <svg class="icon" style="width: 1.25rem; height: 1.25rem;"><use href="{% static 'bambu_run/vendors/coreui-icons-free.svg' %}#cil-arrow-thick-right"></use></svg>
+                            </div>
+                            <div class="stat-value">{{ stats.nozzle_temp|floatformat:1 }}&deg;C</div>
+                            <div class="text-muted small">target {{ stats.nozzle_target_temp|floatformat:0 }}&deg;C
+                                {% if stats.nozzle_type %}· Nozzle {{ stats.nozzle_type }}{% endif %}</div>
                         </div>
                         <i class="bi bi-thermometer-high" style="font-size: 2rem; opacity: 0.3;"></i>
                     </div>
@@ -72,7 +78,7 @@
         {% else %}
         <!-- Nozzle Temperature Card (single-nozzle printers) -->
         <div class="col-12 col-md-6 col-lg-3">
-            <div class="card infra-card-warning">
+            <div class="card infra-card-warning h-100">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
@@ -88,7 +94,7 @@
 
         <!-- Bed Temperature Card -->
         <div class="col-12 col-md-6 col-lg-3">
-            <div class="card infra-card-danger">
+            <div class="card infra-card-danger h-100">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
@@ -103,7 +109,7 @@
 
         <!-- Print Progress Card -->
         <div class="col-12 col-md-6 col-lg-3">
-            <div class="card infra-card-info">
+            <div class="card infra-card-info h-100">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
@@ -118,7 +124,7 @@
 
         <!-- Chamber Light Card -->
         <div class="col-12 col-md-6 col-lg-3">
-            <div class="card {% if stats.chamber_light == 'on' %}infra-card-success{% else %}infra-card-secondary{% endif %}">
+            <div class="card h-100 {% if stats.chamber_light == 'on' %}infra-card-success{% else %}infra-card-secondary{% endif %}">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
@@ -198,34 +204,59 @@
                 </div>
                 <div class="card-body">
                     {% if stats.filaments %}
-                    <div class="row g-3">
-                        {% for filament in stats.filaments %}
-                        <div class="col-12 col-md-6 col-lg-3">
-                            <div class="card filament-card" data-filament-color="{{ filament.color|slice:':6' }}"{% if filament.is_transparent %} data-filament-transparent="true"{% endif %}>
-                                <div class="card-body">
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <h6 class="mb-0">Tray {{ filament.tray_id }}</h6>
-                                        {% if filament.filament_pk %}
-                                        <a href="{% url 'bambu_run:filament_detail' filament.filament_pk %}" class="text-decoration-none" title="View in inventory">
-                                            <svg class="icon icon-sm text-body-secondary"><use href="{% static 'bambu_run/vendors/coreui-icons-free.svg' %}#cil-external-link"></use></svg>
-                                        </a>
-                                        {% endif %}
-                                    </div>
-                                    <p class="mb-1 small"><strong>{{ filament.type }}</strong> - {{ filament.brand }}</p>
-                                    {% if filament.color_name %}<p class="mb-1 small text-body-secondary">{{ filament.color_name }}</p>{% endif %}
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="small">Remaining</span>
-                                        <span class="badge filament-badge">{{ filament.remain_percent }}%</span>
-                                    </div>
-                                    <div class="progress" style="height: 10px; background-color: rgba(0,0,0,0.1);">
-                                        <div class="progress-bar filament-progress" role="progressbar" style="width: {{ filament.remain_percent }}%;" aria-valuenow="{{ filament.remain_percent }}" aria-valuemin="0" aria-valuemax="100"></div>
+                    {% if stats.ams_units|length > 1 %}
+                    <div class="ams-filter-pills mb-3" id="amsFilterPills">
+                        <button type="button" class="btn ams-filter-pill active" data-ams-filter="all">All</button>
+                        {% for unit in stats.ams_units %}
+                        <button type="button" class="btn ams-filter-pill ams-badge-{{ unit.ams_type|slugify }}" data-ams-filter="{{ unit.ams_unit_id }}">{{ unit.ams_type|default:"AMS" }}</button>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <div class="ams-groups">
+                        {% for group in stats.ams_groups %}
+                        <div class="ams-group ams-badge-bg-{{ group.ams_type|slugify }} {% if group.filaments|length > 1 %}ams-group--wide{% else %}ams-group--compact{% endif %}" data-ams-unit-id="{{ group.unit_id }}">
+                            <div class="ams-group-header d-flex justify-content-between align-items-center mb-2">
+                                <strong class="small">{{ group.label }}</strong>
+                                {% if group.humidity is not None or group.temp is not None %}
+                                <span class="small text-body-secondary">
+                                    {% if group.humidity is not None %}{{ group.humidity }}%RH{% endif %}
+                                    {% if group.temp is not None %}&middot; {{ group.temp }}&deg;C{% endif %}
+                                </span>
+                                {% endif %}
+                            </div>
+                            <div class="row g-3">
+                                {% for filament in group.filaments %}
+                                <div class="col-12 {% if group.filaments|length > 1 %}col-md-6 col-lg-3{% endif %}">
+                                    <div class="card filament-card" data-filament-color="{{ filament.color|slice:':6' }}"{% if filament.is_transparent %} data-filament-transparent="true"{% endif %}>
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <h6 class="mb-0">Tray {{ filament.tray_id }}</h6>
+                                                {% if filament.filament_pk %}
+                                                <a href="{% url 'bambu_run:filament_detail' filament.filament_pk %}" class="text-decoration-none" title="View in inventory">
+                                                    <svg class="icon icon-sm text-body-secondary"><use href="{% static 'bambu_run/vendors/coreui-icons-free.svg' %}#cil-external-link"></use></svg>
+                                                </a>
+                                                {% endif %}
+                                            </div>
+                                            <p class="mb-1 small"><strong>{{ filament.type }}</strong> - {{ filament.brand }}</p>
+                                            {% if filament.color_name %}<p class="mb-1 small text-body-secondary">{{ filament.color_name }}</p>{% endif %}
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <span class="small">Remaining</span>
+                                                <span class="badge filament-badge">{{ filament.remain_percent }}%</span>
+                                            </div>
+                                            <div class="progress" style="height: 10px; background-color: rgba(0,0,0,0.1);">
+                                                <div class="progress-bar filament-progress" role="progressbar" style="width: {{ filament.remain_percent }}%;" aria-valuenow="{{ filament.remain_percent }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
+                                {% endfor %}
                             </div>
                         </div>
                         {% endfor %}
+                    </div>
 
-                        {% if stats.external_spool.type %}
+                    {% if stats.external_spool.type %}
+                    <div class="row g-3 mt-1">
                         <div class="col-12 col-md-6 col-lg-3">
                             <div class="card filament-card" data-filament-color="{{ stats.external_spool.color|slice:':6' }}">
                                 <div class="card-body">
@@ -241,8 +272,8 @@
                                 </div>
                             </div>
                         </div>
-                        {% endif %}
                     </div>
+                    {% endif %}
                     {% else %}
                     <p class="text-body-secondary">No filament data available</p>
                     {% endif %}
@@ -467,4 +498,27 @@
     });
 </script>
 {% endif %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const pillsContainer = document.getElementById('amsFilterPills');
+        if (!pillsContainer) return;
+        const items = document.querySelectorAll('.ams-groups .ams-group');
+
+        pillsContainer.addEventListener('click', function(e) {
+            const pill = e.target.closest('.ams-filter-pill');
+            if (!pill) return;
+
+            pillsContainer.querySelectorAll('.ams-filter-pill').forEach(function(p) {
+                p.classList.remove('active');
+            });
+            pill.classList.add('active');
+
+            const filter = pill.dataset.amsFilter;
+            items.forEach(function(item) {
+                const show = filter === 'all' || item.dataset.amsUnitId === filter;
+                item.classList.toggle('d-none', !show);
+            });
+        });
+    });
+</script>
 {% endblock %}

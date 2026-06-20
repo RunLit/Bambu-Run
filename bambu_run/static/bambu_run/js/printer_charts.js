@@ -625,8 +625,23 @@ function createFilamentDatasets(filamentTimeline, timestamps) {
         data: filamentTimeline[key]
     }));
 
-    // Sort by tray_id (numeric first, External last), then by start_idx (chronological)
+    // Distinct (non-null/undefined) AMS units present in this timeline — used to decide
+    // whether labels need an AMS unit prefix (avoid noise for the common single-AMS case).
+    const distinctUnits = new Set(
+        filamentEntries
+            .map(e => e.data.ams_unit_id)
+            .filter(uid => uid !== null && uid !== undefined)
+    );
+    const showUnitPrefix = distinctUnits.size > 1;
+
+    // Sort by AMS unit, then tray_id (numeric first, External last), then by start_idx
     filamentEntries.sort((a, b) => {
+        const unitA = a.data.ams_unit_id ?? -1;
+        const unitB = b.data.ams_unit_id ?? -1;
+        if (unitA !== unitB) {
+            return unitA - unitB;
+        }
+
         const trayA = a.data.tray_id;
         const trayB = b.data.tray_id;
 
@@ -657,6 +672,10 @@ function createFilamentDatasets(filamentTimeline, timestamps) {
             displayLabel = `External (${filament.type})`;
         } else {
             displayLabel = `Tray ${filament.tray_id} (${filament.type})`;
+        }
+
+        if (showUnitPrefix && filament.ams_type) {
+            displayLabel = `${filament.ams_type} · ${displayLabel}`;
         }
 
         // Add brand if it's different from type (avoid redundancy)

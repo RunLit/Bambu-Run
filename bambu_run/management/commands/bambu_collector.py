@@ -554,6 +554,8 @@ class Command(BaseCommand):
                 printer_metric=printer_metric,
                 filament=filament,
                 tray_id=tray_id,
+                ams_unit_id=unit_id_int,
+                ams_type=tray_data.get('ams_type', '') or '',
                 slot_name=tray_data.get('slot'),
                 type=tray_data.get('type'),
                 sub_type=tray_data.get('sub_type'),
@@ -641,31 +643,40 @@ class Command(BaseCommand):
         elif not session.trays_used:
             logger.warning(f"No trays tracked for job {job.project_name}, skipping filament usage")
         else:
+            # A bare tray_id (from `tray_now`) doesn't identify which physical AMS
+            # unit was active when multiple units share the same slot numbering —
+            # so create one usage row per (unit, tray) that had a tracked filament
+            # loaded at job start, rather than guessing a single "correct" unit.
+            created_usages = []
             for tray_id in session.trays_used:
-                start_snap = start_metric.filament_snapshots.filter(
+                start_snaps = start_metric.filament_snapshots.filter(
                     tray_id=tray_id, filament__isnull=False
-                ).first()
-                if not start_snap:
-                    continue
-
-                end_snap = metric.filament_snapshots.filter(
-                    filament=start_snap.filament, tray_id=tray_id
-                ).first()
-
-                usage = FilamentUsage.objects.create(
-                    print_job=job,
-                    filament=start_snap.filament,
-                    tray_id=tray_id,
-                    starting_percent=start_snap.remain_percent or 100,
-                    ending_percent=end_snap.remain_percent if end_snap else None,
-                    is_primary=(len(session.trays_used) == 1),
                 )
-                usage.calculate_consumed()
+                for start_snap in start_snaps:
+                    end_snap = metric.filament_snapshots.filter(
+                        filament=start_snap.filament,
+                        tray_id=tray_id,
+                        ams_unit_id=start_snap.ams_unit_id,
+                    ).first()
+
+                    usage = FilamentUsage.objects.create(
+                        print_job=job,
+                        filament=start_snap.filament,
+                        tray_id=tray_id,
+                        ams_unit_id=start_snap.ams_unit_id,
+                        starting_percent=start_snap.remain_percent or 100,
+                        ending_percent=end_snap.remain_percent if end_snap else None,
+                    )
+                    usage.calculate_consumed()
+                    created_usages.append(usage)
+
+            for usage in created_usages:
+                usage.is_primary = len(created_usages) == 1
                 usage.save()
 
                 if self.verbose:
                     logger.debug(
-                        f"Filament usage for {start_snap.filament} (tray {tray_id}): "
+                        f"Filament usage for {usage.filament} (unit {usage.ams_unit_id}, tray {usage.tray_id}): "
                         f"{usage.starting_percent}% -> {usage.ending_percent}%, consumed {usage.consumed_percent}%"
                     )
 
