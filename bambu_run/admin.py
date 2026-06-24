@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Printer, PrinterMetrics, Filament, FilamentType, FilamentSnapshot, PrintJob, FilamentUsage, BambuCloudTask
+from .models import Printer, PrinterMetrics, Filament, FilamentType, FilamentSnapshot, PrintJob, FilamentUsage, BambuCloudTask, Hotend, HotendSnapshot
 
 
 @admin.register(Printer)
@@ -105,6 +105,21 @@ class FilamentUsageAdmin(admin.ModelAdmin):
     list_display = ('print_job', 'filament', 'tray_id', 'consumed_percent', 'consumed_grams', 'is_primary')
     list_filter = ('is_primary', 'tray_id')
     readonly_fields = ('consumed_percent', 'consumed_grams')
+
+
+@admin.register(Hotend)
+class HotendAdmin(admin.ModelAdmin):
+    list_display = ('printer', 'serial_number', 'nozzle_type', 'is_toolhead', 'slot_number', 'used_time_seconds', 'wear_percent', 'last_seen_at')
+    list_filter = ('printer', 'is_toolhead', 'nozzle_type')
+    search_fields = ('serial_number',)
+    readonly_fields = ('last_seen_at', 'created_at')
+
+
+@admin.register(HotendSnapshot)
+class HotendSnapshotAdmin(admin.ModelAdmin):
+    list_display = ('printer_metric', 'hotend', 'raw_id', 'used_time_seconds', 'wear_percent', 'timestamp')
+    list_filter = ('hotend',)
+    readonly_fields = ('printer_metric', 'hotend', 'raw_id', 'used_time_seconds', 'wear_percent', 'stat', 'timestamp')
 
 
 @admin.register(BambuCloudTask)

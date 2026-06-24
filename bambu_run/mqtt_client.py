@@ -297,6 +297,73 @@ class AMSState:
 
 
 @dataclass
+class HotendInfo:
+    """A single hotend reported in `device.nozzle.info[]` (Vortek rack).
+
+    `raw_id` semantics (confirmed by watching a live "Read All" MQTT capture):
+    0 = currently mounted on the (swappable) toolhead — the sentinel hides the
+    true bay address until "Read All" resolves it; 1 = the fixed left nozzle on
+    dual-nozzle printers (no RFID chip, always reports sn="N/A"); 16-21 = rack
+    bay address, slot_number = raw_id - 15 (1-6).
+    """
+    raw_id: int = 0
+    serial_number: str = ""
+    nozzle_type: str = ""
+    diameter: float = 0.4
+    fila_id: str = ""
+    color: Optional[str] = None
+    used_time_seconds: int = 0
+    wear_percent: float = 0.0
+    stat: int = 0
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "HotendInfo":
+        from .utils import strip_color_padding
+
+        return cls(
+            raw_id=int(data.get("id", 0)),
+            serial_number=data.get("sn", ""),
+            nozzle_type=data.get("type", ""),
+            diameter=float(data.get("diameter", 0.4)),
+            fila_id=data.get("fila_id", ""),
+            color=strip_color_padding(data.get("color_m")),
+            used_time_seconds=int(data.get("p_t", 0)),
+            wear_percent=round(float(data.get("wear", 0.0)) / 128.0 * 100, 2),
+            stat=int(data.get("stat", 0)),
+        )
+
+    @property
+    def is_toolhead(self) -> bool:
+        return self.raw_id == 0
+
+    @property
+    def is_empty(self) -> bool:
+        return self.serial_number in ("", "N/A")
+
+    @property
+    def slot_number(self) -> Optional[int]:
+        if 16 <= self.raw_id <= 21:
+            return self.raw_id - 15
+        return None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "raw_id": self.raw_id,
+            "serial_number": self.serial_number,
+            "nozzle_type": self.nozzle_type,
+            "diameter": self.diameter,
+            "fila_id": self.fila_id,
+            "color": self.color,
+            "used_time_seconds": self.used_time_seconds,
+            "wear_percent": self.wear_percent,
+            "stat": self.stat,
+            "is_toolhead": self.is_toolhead,
+            "is_empty": self.is_empty,
+            "slot_number": self.slot_number,
+        }
+
+
+@dataclass
 class PrinterState:
     """Complete printer state parsed from MQTT data"""
     timestamp: str = ""
@@ -388,6 +455,9 @@ class PrinterState:
     # External spool (virtual tray)
     vt_tray: Optional[Dict[str, Any]] = None
 
+    # Vortek hotend rack (device.nozzle.info[])
+    hotends: List[HotendInfo] = field(default_factory=list)
+
     # Raw data for any additional fields
     _raw_data: Dict[str, Any] = field(default_factory=dict, repr=False)
 
@@ -430,6 +500,12 @@ class PrinterState:
             if isinstance(t, int):
                 nozzle_target_temp_left = float((t >> 16) & 0xFFFF)
                 nozzle_temp_left = float(t & 0xFFFF)
+
+        # Vortek hotend rack: device.nozzle.info[] — one entry per hotend.
+        hotends = [
+            HotendInfo.from_dict(h)
+            for h in (device.get("nozzle") or {}).get("info") or []
+        ]
 
         return cls(
             timestamp=timestamp,
@@ -487,6 +563,7 @@ class PrinterState:
             gcode_file_prepare_percent=str(print_data.get("gcode_file_prepare_percent", "")),
             lifecycle=print_data.get("lifecycle", ""),
             vt_tray=print_data.get("vt_tray"),
+            hotends=hotends,
             _raw_data=data,
         )
 
@@ -529,6 +606,11 @@ class PrinterState:
             "wifi_signal_dbm": self.wifi_signal_dbm,
             "print_error": self.print_error,
             "has_errors": self.print_error != 0,
+            # Full `print.device` payload, unfiltered. H2C's Vortek rack (6 swappable
+            # hotends + 1 fixed left nozzle) isn't fully modeled yet — stash everything
+            # here so no data is lost once the real Vortek MQTT schema is confirmed.
+            "vortek_raw": self._raw_data.get("print", {}).get("device", {}),
+            "hotends": [h.to_dict() for h in self.hotends],
             "hms": self.hms,
             "stg_cur": self.stg_cur,
             "lights_report": self.lights_report,

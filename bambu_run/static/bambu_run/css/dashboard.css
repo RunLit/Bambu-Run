@@ -64,3 +64,93 @@
     opacity: 0.9;
     color: rgba(255, 255, 255, 0.9);
 }
+
+/* AMS unit type colors — CSS variables so RAE/standalone can override per theme */
+:root {
+    --ams-badge-ams: #6c757d;
+    --ams-badge-ams-2-pro: #0d6efd;
+    --ams-badge-ams-ht: #fd7e14;
+    --ams-group-border-color: rgba(0, 0, 0, 0.15);
+}
+
+[data-coreui-theme="dark"] {
+    --ams-group-border-color: rgba(255, 255, 255, 0.2);
+}
+
+.ams-badge-ams {
+    background-color: var(--ams-badge-ams);
+    color: #fff;
+}
+
+.ams-badge-ams-2-pro {
+    background-color: var(--ams-badge-ams-2-pro);
+    color: #fff;
+}
+
+.ams-badge-ams-ht {
+    background-color: var(--ams-badge-ams-ht);
+    color: #fff;
+}
+
+.ams-filter-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.ams-filter-pill {
+    border-radius: 50rem;
+    padding: 0.25rem 0.9rem;
+    font-size: 0.85rem;
+    border: 1px solid var(--ams-group-border-color);
+    background-color: transparent;
+    opacity: 0.6;
+}
+
+.ams-filter-pill.active {
+    opacity: 1;
+    font-weight: 600;
+    border-color: currentColor;
+}
+
+/* Grouped AMS unit panels — wide (multi-slot) units stack one per row,
+   compact (single-slot, e.g. AMS HT) units flow side-by-side and wrap. */
+.ams-groups {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.ams-group {
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    border: 1px solid var(--ams-group-border-color);
+}
+
+.ams-group--wide {
+    flex: 1 1 100%;
+}
+
+.ams-group--compact {
+    flex: 0 1 auto;
+    min-width: 220px;
+}
+
+.ams-badge-bg-ams {
+    background-color: color-mix(in srgb, var(--ams-badge-ams) 8%, transparent);
+    border-left: 3px solid var(--ams-badge-ams);
+}
+
+.ams-badge-bg-ams-2-pro {
+    background-color: color-mix(in srgb, var(--ams-badge-ams-2-pro) 8%, transparent);
+    border-left: 3px solid var(--ams-badge-ams-2-pro);
+}
+
+.ams-badge-bg-ams-ht {
+    background-color: color-mix(in srgb, var(--ams-badge-ams-ht) 8%, transparent);
+    border-left: 3px solid var(--ams-badge-ams-ht);
+}
+
+.ams-badge-bg- {
+    border-left: 3px solid var(--ams-group-border-color);
+}

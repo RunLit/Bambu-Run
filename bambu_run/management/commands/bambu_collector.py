@@ -13,8 +13,9 @@ import logging
 import os
 import ssl
 import time
+from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
@@ -24,6 +25,56 @@ from bambu_run.conf import app_settings
 from bambu_run.models import Printer, PrinterMetrics
 
 logger = logging.getLogger("bambu_run.collector")
+
+
+def resolve_printer_device(device_id: str, device_info: Optional[dict] = None) -> Printer:
+    """Find-or-create the Printer row for a Bambu cloud device, keyed by serial number.
+
+    `device_info` is one entry from BambuClient.get_devices() (keys: name,
+    dev_product_name, dev_id, ...). Falls back to generic defaults when unavailable
+    (e.g. local-only connections that never call get_devices()).
+    """
+    device_info = device_info or {}
+    name = device_info.get("name") or "Bambu Lab Printer"
+    model = device_info.get("dev_product_name") or "Bambu Lab"
+
+    printer = Printer.objects.filter(serial_number=device_id).first()
+
+    if printer is None:
+        # Upgrade path: a pre-multi-printer deployment has exactly one Printer row
+        # with no serial number yet. Backfill it instead of creating a duplicate.
+        # If there's more than one such row, we can't tell which one this device
+        # used to be, so don't guess — create a fresh row instead.
+        legacy_candidates = list(Printer.objects.filter(serial_number__isnull=True)[:2])
+        if len(legacy_candidates) == 1:
+            printer = legacy_candidates[0]
+            printer.serial_number = device_id
+
+    if printer is None:
+        printer = Printer(serial_number=device_id)
+
+    printer.name = name
+    printer.model = model
+    printer.manufacturer = "Bambu Lab"
+    printer.is_active = True
+    printer.save()
+    return printer
+
+
+@dataclass
+class DeviceSession:
+    """Per-printer mutable state for one bound device in a multi-printer collector run."""
+
+    device_id: str
+    client: Any  # BambuPrinter
+    printer: Printer
+    current_print_job: Optional[Any] = None
+    last_gcode_state: Optional[str] = None
+    last_subtask_name: Optional[str] = None
+    trays_used: set = field(default_factory=set)
+    error_count: int = 0
+    success_count: int = 0
+    mqtt_connect_errors: int = 0
 
 
 class Command(BaseCommand):
@@ -51,18 +102,11 @@ class Command(BaseCommand):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.printer_client = None
-        self.printer_device = None
+        self.sessions: Dict[str, DeviceSession] = {}
+        self._token: Optional[str] = None
         self.verbose = False
         self.disable_ssl_verify = False
-        self.error_count = 0
-        self.success_count = 0
-        self.mqtt_connect_errors = 0
         self.start_time = None
-        self.current_print_job = None
-        self.last_gcode_state = None
-        self.last_subtask_name = None
-        self.trays_used = set()
 
     def handle(self, *args, **options):
         self.verbose = options["verbose"]
@@ -100,12 +144,13 @@ class Command(BaseCommand):
         self._configure_logging()
 
         try:
-            self._initialize_printer()
+            self._initialize_printers()
         except Exception as e:
             raise CommandError(f"Initialization failed: {e}")
 
         self.start_time = timezone.now()
-        logger.info(f"Bambu Run data collector started for printer: {self.printer_device.name}")
+        printer_names = ", ".join(s.printer.name for s in self.sessions.values())
+        logger.info(f"Bambu Run data collector started for {len(self.sessions)} printer(s): {printer_names}")
         logger.info(f"Collection interval: {interval} seconds")
         logger.info(f"Mode: {'Single run' if run_once else 'Continuous'}")
 
@@ -113,7 +158,8 @@ class Command(BaseCommand):
             if run_once:
                 import time as _time
                 _time.sleep(5)
-                self._collect_printer_data()
+                for session in self.sessions.values():
+                    self._collect_printer_data(session)
                 logger.info("Single collection completed successfully")
             else:
                 self._run_continuous_loop(interval)
@@ -124,7 +170,7 @@ class Command(BaseCommand):
             logger.exception(f"Fatal error in main loop: {e}")
             raise CommandError(f"Runner failed: {e}")
 
-    def _request_full_status_when_ready(self, timeout: float = 20.0) -> None:
+    def _request_full_status_when_ready(self, client, timeout: float = 20.0) -> None:
         """Send pushall once the MQTT broker connection is confirmed.
 
         BambuPrinter._connected is set True immediately after connect(blocking=False),
@@ -134,9 +180,9 @@ class Command(BaseCommand):
         import time as _time
         deadline = _time.time() + timeout
         while _time.time() < deadline:
-            mqtt_client = getattr(self.printer_client, "_mqtt", None)
+            mqtt_client = getattr(client, "_mqtt", None)
             if mqtt_client is not None and getattr(mqtt_client, "connected", False):
-                self.printer_client._mqtt.request_full_status()
+                client._mqtt.request_full_status()
                 logger.info("Sent MQTT pushall request")
                 return
             _time.sleep(0.5)
@@ -155,7 +201,9 @@ class Command(BaseCommand):
             handler.setFormatter(formatter)
             logger.addHandler(handler)
 
-    def _initialize_printer(self):
+    def _initialize_printers(self):
+        """Authenticate once, discover every device bound to the account, and open
+        one BambuPrinter (own MQTT thread) per device — all in this single process."""
         from bambu_run.mqtt_client import BambuPrinter
 
         bambu_username = os.environ.get("BAMBU_USERNAME")
@@ -169,30 +217,12 @@ class Command(BaseCommand):
                 "environment variables must be set"
             )
 
-        logger.info("Connecting to Bambu Lab printer...")
+        logger.info("Authenticating with Bambu Lab cloud...")
         try:
-            if bambu_token:
-                logger.info("Using saved BAMBU_TOKEN for authentication")
-                self.printer_client = BambuPrinter(
-                    token=bambu_token, device_id=bambu_device_id
-                )
-            else:
-                logger.info("Authenticating with username/password")
-                self.printer_client = BambuPrinter(
-                    username=bambu_username,
-                    password=bambu_password,
-                    device_id=bambu_device_id,
-                )
-
-            logger.info("Initiating MQTT connection...")
-            self.printer_client.connect(blocking=False)
-            logger.info("MQTT connection initiated (non-blocking)")
-            # Request full status so AMS + dual-nozzle data arrive on startup.
-            try:
-                self._request_full_status_when_ready()
-            except Exception as e:
-                logger.warning("pushall request skipped (non-fatal): %s", e)
-
+            auth = BambuPrinter(
+                username=bambu_username, password=bambu_password, token=bambu_token,
+            )
+            self._token = auth._ensure_token()
         except Exception as e:
             if "CERTIFICATE_VERIFY_FAILED" in str(e) or "SSL" in str(e):
                 error_msg = (
@@ -203,56 +233,62 @@ class Command(BaseCommand):
                     "3. pip install --upgrade certifi\n"
                 )
                 raise CommandError(error_msg)
-            raise CommandError(f"Failed to initialize printer client: {e}")
+            raise CommandError(f"Failed to authenticate: {e}")
 
-        self.printer_device = self._ensure_printer_device_exists()
-        logger.info(f"Initialized for printer device: {self.printer_device}")
-
-    def _ensure_printer_device_exists(self) -> Printer:
-        try:
-            snapshot = self.printer_client.get_snapshot()
-
-            if snapshot:
-                device, created = Printer.objects.update_or_create(
-                    model="Bambu Lab",
-                    defaults={
-                        "name": "Bambu Lab Printer",
-                        "manufacturer": "Bambu Lab",
-                        "is_active": True,
-                    },
-                )
-                action = "Created" if created else "Updated"
-                logger.info(f"{action} printer device record: {device}")
-                return device
-            else:
-                logger.warning("Snapshot returned None - MQTT not connected yet")
-                device = Printer.objects.filter(is_active=True).first()
-                if device:
-                    logger.info(f"Using existing device record: {device}")
-                    return device
-                else:
-                    device = Printer.objects.create(
-                        name="Bambu Lab Printer",
-                        model="Bambu Lab",
-                        manufacturer="Bambu Lab",
-                        is_active=True,
-                    )
-                    logger.info(f"Created placeholder device: {device}")
-                    return device
-
-        except Exception as e:
-            logger.error(f"Error during device initialization: {e}")
+        device_infos = self._discover_devices(bambu_device_id)
+        for device_id, device_info in device_infos.items():
             try:
-                device = Printer.objects.filter(is_active=True).first()
-                if device:
-                    logger.warning(f"Using existing device record from DB: {device}")
-                    return device
-                else:
-                    raise CommandError(
-                        "No printer device found in database and initialization failed."
-                    )
-            except Printer.DoesNotExist:
-                raise CommandError("Failed to create or retrieve printer device.")
+                self._add_session(device_id, device_info)
+            except Exception as e:
+                logger.error(f"Failed to initialize printer {device_id}: {e}")
+
+        if not self.sessions:
+            raise CommandError("No printer sessions could be initialized")
+
+    def _discover_devices(self, explicit_device_id: Optional[str]) -> Dict[str, dict]:
+        """Return {device_id: device_info} for every printer to monitor.
+
+        device_info comes from BambuClient.get_devices() (name, dev_product_name,
+        etc.) — empty dict when explicitly pinned to one device via BAMBU_DEVICE_ID
+        and the cloud listing can't be reached.
+        """
+        from bambu_run.mqtt_client import BambuClient
+
+        try:
+            cloud = BambuClient(token=self._token)
+            devices = cloud.get_devices()
+        except Exception as e:
+            if explicit_device_id:
+                logger.warning(f"Could not list account devices ({e}); using BAMBU_DEVICE_ID only")
+                return {explicit_device_id: {}}
+            raise
+
+        device_infos = {d.get("dev_id"): d for d in devices if d.get("dev_id")}
+
+        if explicit_device_id:
+            return {explicit_device_id: device_infos.get(explicit_device_id, {})}
+
+        if not device_infos:
+            raise CommandError("No devices found on this account")
+
+        return device_infos
+
+    def _add_session(self, device_id: str, device_info: dict) -> "DeviceSession":
+        from bambu_run.mqtt_client import BambuPrinter
+
+        logger.info(f"Connecting to printer {device_id} ({device_info.get('name', 'unknown')})...")
+        client = BambuPrinter(token=self._token, device_id=device_id)
+        client.connect(blocking=False)
+        try:
+            self._request_full_status_when_ready(client)
+        except Exception as e:
+            logger.warning("pushall request skipped (non-fatal): %s", e)
+
+        printer = resolve_printer_device(device_id, device_info)
+        session = DeviceSession(device_id=device_id, client=client, printer=printer)
+        self.sessions[device_id] = session
+        logger.info(f"Initialized session for printer: {printer}")
+        return session
 
     def _run_continuous_loop(self, interval: int):
         iteration = 0
@@ -263,7 +299,8 @@ class Command(BaseCommand):
             if self.verbose:
                 logger.debug(f"=== Iteration {iteration} ===")
 
-            self._collect_printer_data()
+            for session in list(self.sessions.values()):
+                self._collect_printer_data(session)
 
             elapsed = time.time() - loop_start
             sleep_time = max(0, interval - elapsed)
@@ -273,8 +310,27 @@ class Command(BaseCommand):
 
             if iteration % 100 == 0:
                 self._print_statistics()
+                self._refresh_devices()
 
             time.sleep(sleep_time)
+
+    def _refresh_devices(self):
+        """Pick up printers added to the account without restarting the process."""
+        if os.environ.get("BAMBU_DEVICE_ID"):
+            return  # pinned to a single explicit device — nothing to discover
+        try:
+            device_infos = self._discover_devices(None)
+        except Exception as e:
+            logger.warning(f"Device refresh skipped (non-fatal): {e}")
+            return
+
+        for device_id, device_info in device_infos.items():
+            if device_id not in self.sessions:
+                logger.info(f"New printer detected on account: {device_id}")
+                try:
+                    self._add_session(device_id, device_info)
+                except Exception as e:
+                    logger.error(f"Failed to initialize newly-detected printer {device_id}: {e}")
 
     def _convert_mqtt_color(self, mqtt_color):
         if not mqtt_color:
@@ -498,6 +554,8 @@ class Command(BaseCommand):
                 printer_metric=printer_metric,
                 filament=filament,
                 tray_id=tray_id,
+                ams_unit_id=unit_id_int,
+                ams_type=tray_data.get('ams_type', '') or '',
                 slot_name=tray_data.get('slot'),
                 type=tray_data.get('type'),
                 sub_type=tray_data.get('sub_type'),
@@ -513,19 +571,51 @@ class Command(BaseCommand):
                 match_method=match_method
             )
 
-    def _track_print_job(self, metric, snapshot):
-        from bambu_run.models import PrintJob, FilamentUsage
+    def _update_hotends(self, printer, printer_metric, hotends_data):
+        from bambu_run.models import Hotend, HotendSnapshot
+
+        for h in hotends_data:
+            if h.get("is_empty"):
+                continue
+
+            hotend, _ = Hotend.objects.update_or_create(
+                printer=printer,
+                serial_number=h.get("serial_number"),
+                defaults={
+                    "raw_id": h.get("raw_id", 0),
+                    "nozzle_type": h.get("nozzle_type", ""),
+                    "diameter": self._to_decimal(h.get("diameter")),
+                    "slot_number": h.get("slot_number"),
+                    "is_toolhead": bool(h.get("is_toolhead")),
+                    "last_filament_profile_id": h.get("fila_id", ""),
+                    "last_color": h.get("color") or "",
+                    "used_time_seconds": h.get("used_time_seconds", 0),
+                    "wear_percent": h.get("wear_percent", 0),
+                },
+            )
+
+            HotendSnapshot.objects.create(
+                printer_metric=printer_metric,
+                hotend=hotend,
+                raw_id=h.get("raw_id", 0),
+                used_time_seconds=h.get("used_time_seconds", 0),
+                wear_percent=h.get("wear_percent", 0),
+                stat=h.get("stat"),
+            )
+
+    def _track_print_job(self, session, metric, snapshot):
+        from bambu_run.models import PrintJob
 
         gcode_state = snapshot.get('gcode_state')
         subtask_name = snapshot.get('subtask_name')
 
-        if self._is_print_starting(gcode_state, subtask_name):
-            if self.current_print_job:
-                self._finalize_print_job(metric, snapshot)
+        if self._is_print_starting(session, gcode_state, subtask_name):
+            if session.current_print_job:
+                self._finalize_print_job(session, metric, snapshot)
 
             raw_task_id = snapshot.get('task_id')
-            self.current_print_job = PrintJob.objects.create(
-                device=self.printer_device,
+            session.current_print_job = PrintJob.objects.create(
+                device=session.printer,
                 project_name=subtask_name,
                 gcode_file=snapshot.get('gcode_file'),
                 start_time=metric.timestamp,
@@ -534,109 +624,119 @@ class Command(BaseCommand):
                 completion_percent=snapshot.get('print_percent', 0),
                 cloud_task_id_raw=int(raw_task_id) if raw_task_id else None,
             )
-            self.trays_used = set()
-            logger.info(f"Print job started: {subtask_name}")
+            session.trays_used = set()
+            logger.info(f"[{session.device_id}] Print job started: {subtask_name}")
 
-        if self.current_print_job:
+        if session.current_print_job:
             tray_now = snapshot.get('tray_now', '')
             if tray_now not in (None, '', '255'):
                 try:
                     tray_id = int(tray_now)
                     if 0 <= tray_id <= 15:
-                        self.trays_used.add(tray_id)
+                        session.trays_used.add(tray_id)
                 except (ValueError, TypeError):
                     pass
 
-        if self._is_print_ending(gcode_state) and self.current_print_job:
-            self._finalize_print_job(metric, snapshot)
+        if self._is_print_ending(session, gcode_state) and session.current_print_job:
+            self._finalize_print_job(session, metric, snapshot)
 
-        self.last_gcode_state = gcode_state
-        self.last_subtask_name = subtask_name
+        session.last_gcode_state = gcode_state
+        session.last_subtask_name = subtask_name
 
-    def _is_print_starting(self, gcode_state, subtask_name):
+    def _is_print_starting(self, session, gcode_state, subtask_name):
         is_printing = gcode_state not in ['FINISH', 'IDLE', 'FAILED', None, '']
-        has_new_job = subtask_name and subtask_name != self.last_subtask_name
+        has_new_job = subtask_name and subtask_name != session.last_subtask_name
         return is_printing and has_new_job
 
-    def _is_print_ending(self, gcode_state):
+    def _is_print_ending(self, session, gcode_state):
         ending_states = ['FINISH', 'FAILED']
-        return gcode_state in ending_states and self.last_gcode_state not in ending_states
+        return gcode_state in ending_states and session.last_gcode_state not in ending_states
 
-    def _finalize_print_job(self, metric, snapshot):
+    def _finalize_print_job(self, session, metric, snapshot):
         from bambu_run.models import FilamentUsage
 
-        self.current_print_job.end_time = metric.timestamp
-        self.current_print_job.end_metric = metric
-        self.current_print_job.final_status = snapshot.get('gcode_state')
-        self.current_print_job.completion_percent = snapshot.get('print_percent', 0)
-        self.current_print_job.calculate_duration()
-        self.current_print_job.save()
+        job = session.current_print_job
+        job.end_time = metric.timestamp
+        job.end_metric = metric
+        job.final_status = snapshot.get('gcode_state')
+        job.completion_percent = snapshot.get('print_percent', 0)
+        job.calculate_duration()
+        job.save()
 
         try:
             from bambu_run.bambu_cloud import fetch_and_upsert_task
-            fetch_and_upsert_task(self.printer_client._client, self.current_print_job)
+            fetch_and_upsert_task(session.client._client, job)
         except Exception as e:
             logger.warning(f"Cloud task sync skipped (non-fatal): {e}")
 
-        start_metric = self.current_print_job.start_metric
+        start_metric = job.start_metric
         if not start_metric:
-            logger.warning(f"No start_metric for job {self.current_print_job.id}, skipping filament usage")
-        elif not self.trays_used:
-            logger.warning(f"No trays tracked for job {self.current_print_job.project_name}, skipping filament usage")
+            logger.warning(f"No start_metric for job {job.id}, skipping filament usage")
+        elif not session.trays_used:
+            logger.warning(f"No trays tracked for job {job.project_name}, skipping filament usage")
         else:
-            for tray_id in self.trays_used:
-                start_snap = start_metric.filament_snapshots.filter(
+            # A bare tray_id (from `tray_now`) doesn't identify which physical AMS
+            # unit was active when multiple units share the same slot numbering —
+            # so create one usage row per (unit, tray) that had a tracked filament
+            # loaded at job start, rather than guessing a single "correct" unit.
+            created_usages = []
+            for tray_id in session.trays_used:
+                start_snaps = start_metric.filament_snapshots.filter(
                     tray_id=tray_id, filament__isnull=False
-                ).first()
-                if not start_snap:
-                    continue
-
-                end_snap = metric.filament_snapshots.filter(
-                    filament=start_snap.filament, tray_id=tray_id
-                ).first()
-
-                usage = FilamentUsage.objects.create(
-                    print_job=self.current_print_job,
-                    filament=start_snap.filament,
-                    tray_id=tray_id,
-                    starting_percent=start_snap.remain_percent or 100,
-                    ending_percent=end_snap.remain_percent if end_snap else None,
-                    is_primary=(len(self.trays_used) == 1),
                 )
-                usage.calculate_consumed()
+                for start_snap in start_snaps:
+                    end_snap = metric.filament_snapshots.filter(
+                        filament=start_snap.filament,
+                        tray_id=tray_id,
+                        ams_unit_id=start_snap.ams_unit_id,
+                    ).first()
+
+                    usage = FilamentUsage.objects.create(
+                        print_job=job,
+                        filament=start_snap.filament,
+                        tray_id=tray_id,
+                        ams_unit_id=start_snap.ams_unit_id,
+                        starting_percent=start_snap.remain_percent or 100,
+                        ending_percent=end_snap.remain_percent if end_snap else None,
+                    )
+                    usage.calculate_consumed()
+                    created_usages.append(usage)
+
+            for usage in created_usages:
+                usage.is_primary = len(created_usages) == 1
                 usage.save()
 
                 if self.verbose:
                     logger.debug(
-                        f"Filament usage for {start_snap.filament} (tray {tray_id}): "
+                        f"Filament usage for {usage.filament} (unit {usage.ams_unit_id}, tray {usage.tray_id}): "
                         f"{usage.starting_percent}% -> {usage.ending_percent}%, consumed {usage.consumed_percent}%"
                     )
 
         logger.info(
-            f"Print job finished: {self.current_print_job.project_name} "
-            f"({self.current_print_job.final_status}) - Duration: {self.current_print_job.duration_minutes} min, "
-            f"Trays used: {sorted(self.trays_used) if self.trays_used else 'none tracked'}"
+            f"[{session.device_id}] Print job finished: {job.project_name} "
+            f"({job.final_status}) - Duration: {job.duration_minutes} min, "
+            f"Trays used: {sorted(session.trays_used) if session.trays_used else 'none tracked'}"
         )
 
-        self.current_print_job = None
-        self.trays_used = set()
+        session.current_print_job = None
+        session.trays_used = set()
 
-    def _collect_printer_data(self):
+    def _collect_printer_data(self, session: "DeviceSession"):
         try:
-            snapshot = self.printer_client.get_snapshot()
+            snapshot = session.client.get_snapshot()
 
             if snapshot is None:
-                self.mqtt_connect_errors += 1
-                if self.mqtt_connect_errors <= 5 or self.verbose:
+                session.mqtt_connect_errors += 1
+                if session.mqtt_connect_errors <= 5 or self.verbose:
                     logger.warning(
-                        f"MQTT not connected yet or no data available "
-                        f"(attempt {self.mqtt_connect_errors})"
+                        f"[{session.device_id}] MQTT not connected yet or no data available "
+                        f"(attempt {session.mqtt_connect_errors})"
                     )
                 return
 
             with transaction.atomic():
                 metric = PrinterMetrics.objects.create(
-                    device=self.printer_device,
+                    device=session.printer,
                     timestamp=timezone.now(),
                     nozzle_temp=self._to_decimal(snapshot.get("nozzle_temp")),
                     nozzle_target_temp=self._to_decimal(snapshot.get("nozzle_target_temp")),
@@ -688,27 +788,33 @@ class Command(BaseCommand):
                     ams_units=snapshot.get("ams_units", []),
                     external_spool=snapshot.get("external_spool", {}),
                     lights_report=snapshot.get("lights_report", []),
+                    vortek_raw=snapshot.get("vortek_raw", {}),
+                    nozzle_info=snapshot.get("hotends", []),
                 )
 
                 filaments_data = snapshot.get('filaments', [])
                 if filaments_data:
                     self._create_filament_snapshots(metric, filaments_data, snapshot)
 
-                self._track_print_job(metric, snapshot)
+                hotends_data = snapshot.get('hotends', [])
+                if hotends_data:
+                    self._update_hotends(session.printer, metric, hotends_data)
 
-                self.success_count += 1
+                self._track_print_job(session, metric, snapshot)
+
+                session.success_count += 1
 
                 if self.verbose:
                     logger.debug(
-                        f"Printer Metrics: Nozzle={snapshot.get('nozzle_temp')}C, "
+                        f"[{session.device_id}] Printer Metrics: Nozzle={snapshot.get('nozzle_temp')}C, "
                         f"Bed={snapshot.get('bed_temp')}C, "
                         f"Progress={snapshot.get('print_percent')}%, "
                         f"State={snapshot.get('gcode_state')}"
                     )
 
         except Exception as e:
-            self.error_count += 1
-            logger.error(f"Error collecting printer data (total errors: {self.error_count}): {e}")
+            session.error_count += 1
+            logger.error(f"[{session.device_id}] Error collecting printer data (total errors: {session.error_count}): {e}")
             if self.verbose:
                 logger.exception("Detailed traceback:")
 
@@ -723,16 +829,20 @@ class Command(BaseCommand):
     def _print_statistics(self):
         if self.start_time:
             runtime = timezone.now() - self.start_time
-            total_collections = self.success_count + self.error_count
+            success_count = sum(s.success_count for s in self.sessions.values())
+            error_count = sum(s.error_count for s in self.sessions.values())
+            mqtt_connect_errors = sum(s.mqtt_connect_errors for s in self.sessions.values())
+            total_collections = success_count + error_count
             success_rate = (
-                (self.success_count / total_collections * 100)
+                (success_count / total_collections * 100)
                 if total_collections > 0
                 else 0
             )
 
             logger.info("=== Statistics ===")
             logger.info(f"Runtime: {runtime}")
-            logger.info(f"Successful collections: {self.success_count}")
-            logger.info(f"Failed collections: {self.error_count}")
-            logger.info(f"MQTT connection warnings: {self.mqtt_connect_errors}")
+            logger.info(f"Printers tracked: {len(self.sessions)}")
+            logger.info(f"Successful collections: {success_count}")
+            logger.info(f"Failed collections: {error_count}")
+            logger.info(f"MQTT connection warnings: {mqtt_connect_errors}")
             logger.info(f"Success rate: {success_rate:.1f}%")

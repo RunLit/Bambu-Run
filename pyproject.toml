@@ -62,3 +62,7 @@ bambu_run = [
     "templates/bambu_run/*.html",
     "static/bambu_run/**/*",
 ]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+python_files = "test_*.py"

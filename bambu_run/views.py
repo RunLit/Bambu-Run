@@ -1,8 +1,9 @@
 from datetime import timedelta, datetime
 from django.views.generic import TemplateView, View, ListView, CreateView, UpdateView, DetailView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db.models import Q, Sum
@@ -10,7 +11,7 @@ import json
 import zoneinfo
 
 from .conf import app_settings
-from .models import Printer, PrinterMetrics, Filament, FilamentColor, FilamentType, FilamentSnapshot, PrintJob, FilamentUsage
+from .models import Printer, PrinterMetrics, Filament, FilamentColor, FilamentType, FilamentSnapshot, PrintJob, FilamentUsage, Hotend
 from .forms import FilamentForm, FilamentColorForm, FilamentTypeForm
 
 _METRICS_API_FIELDS = [
@@ -26,6 +27,17 @@ _METRICS_API_FIELDS = [
 _MAX_CHART_POINTS = 3000
 
 
+def resolve_printer_from_request(pk):
+    """Resolve which Printer a dashboard/API view should show.
+
+    `pk` given (URL kwarg) -> that exact printer, 404 if missing/inactive.
+    `pk` omitted -> first active printer (today's single-printer default behavior).
+    """
+    if pk is not None:
+        return get_object_or_404(Printer, pk=pk, is_active=True)
+    return Printer.objects.filter(is_active=True).first()
+
+
 class PrinterDashboardView(LoginRequiredMixin, TemplateView):
     template_name = "bambu_run/printer_dashboard.html"
 
@@ -38,13 +50,20 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         context['bambu_run_base_template'] = app_settings.BASE_TEMPLATE
 
+        all_printers = Printer.objects.filter(is_active=True)
+        context["all_printers"] = all_printers
+        # Shown even with a single printer — hints that multi-printer support exists.
+        context["show_printer_switcher"] = all_printers.exists()
+
         try:
-            printer_device = Printer.objects.filter(is_active=True).first()
+            printer_device = resolve_printer_from_request(self.kwargs.get("pk"))
             if not printer_device:
                 context["error"] = (
                     "No 3D printer device found. Please run bambu_collector first."
                 )
                 return context
+        except Http404:
+            raise
         except Exception as e:
             context["error"] = f"Error loading printer device: {str(e)}"
             return context
@@ -129,6 +148,8 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
                         'brand': snapshot.sub_type or 'Unknown',
                         'color': snapshot.color or 'FFFFFFFF',
                         'remain_percent': snapshot.remain_percent or 0,
+                        'ams_unit_id': snapshot.ams_unit_id,
+                        'ams_type': snapshot.ams_type or '',
                     }
                     if snapshot.filament:
                         filament_dict['color_name'] = snapshot.filament.color
@@ -137,6 +158,37 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
                     filaments_list.append(filament_dict)
             except Exception:
                 filaments_list = []
+
+            # Distinct AMS units represented in this snapshot, for the unit
+            # filter/badges in the template. Sort numeric unit ids first
+            # (AMS / AMS 2 Pro), HT (id 128 / bit 0x80 set) last.
+            seen_units = {}
+            for f in filaments_list:
+                uid = f.get('ams_unit_id')
+                if uid is not None and uid not in seen_units:
+                    seen_units[uid] = f.get('ams_type') or ''
+            ams_units_list = [
+                {'ams_unit_id': uid, 'ams_type': label}
+                for uid, label in sorted(seen_units.items())
+            ]
+
+            # Group trays by physical AMS unit for the panel-style dashboard layout —
+            # one tinted panel per unit, full-width for multi-slot units (AMS/AMS 2 Pro),
+            # compact for single-slot units (AMS HT) so several can flow side-by-side.
+            units_meta = {
+                u.get('unit_id'): u for u in (latest_metric.ams_units or [])
+            }
+            ams_groups = []
+            for uid, label in sorted(seen_units.items()):
+                unit_meta = units_meta.get(str(uid), {})
+                ams_groups.append({
+                    'unit_id': uid,
+                    'ams_type': label,
+                    'label': f"{label or 'AMS'} (Unit {uid})",
+                    'humidity': unit_meta.get('humidity'),
+                    'temp': unit_meta.get('temp'),
+                    'filaments': [f for f in filaments_list if f.get('ams_unit_id') == uid],
+                })
 
             subtask_name = latest_metric.subtask_name or "No active print"
             # Look up active PrintJob for a better display name (cloud design_title)
@@ -177,6 +229,21 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
                 "ams_temp": float(latest_metric.ams_temp) if latest_metric.ams_temp else None,
                 "ams_humidity": latest_metric.ams_humidity,
                 "filaments": filaments_list,
+                "ams_units": ams_units_list,
+                "ams_groups": ams_groups,
+                "hotends": list(
+                    Hotend.objects.filter(printer=printer_device)
+                    .order_by('-is_toolhead', 'slot_number', 'serial_number')
+                ),
+                # Nozzle positions with no induction chip (no stable serial number to
+                # key a Hotend registry row on, e.g. H2C's fixed left nozzle) — shown
+                # read-only from the latest poll, not persisted/historical. Entries with
+                # no readable type/diameter at all (i.e. genuinely nothing there) are
+                # dropped rather than shown as an empty placeholder.
+                "nozzle_positions": [
+                    h for h in (latest_metric.nozzle_info or [])
+                    if h.get('is_empty') and (h.get('nozzle_type') or h.get('diameter'))
+                ],
                 "external_spool": latest_metric.external_spool or {},
                 "timestamp": latest_metric.timestamp.astimezone(tz).strftime("%Y-%m-%d %H:%M:%S"),
             }
@@ -259,15 +326,19 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
 
             for snapshot in snapshots:
                 tray_id = snapshot.tray_id
+                ams_unit_id = snapshot.ams_unit_id
+                ams_type = snapshot.ams_type or ''
                 fil_type = snapshot.type or 'Unknown'
                 fil_sub_type = snapshot.sub_type or 'Unknown'
                 fil_color = snapshot.color or 'FFFFFFFF'
 
-                unique_key = f"{tray_id}_{fil_type}_{fil_sub_type}_{fil_color}"
+                unique_key = f"{ams_unit_id}_{tray_id}_{fil_type}_{fil_sub_type}_{fil_color}"
 
                 if unique_key not in filament_data:
                     filament_data[unique_key] = {
                         'tray_id': tray_id,
+                        'ams_unit_id': ams_unit_id,
+                        'ams_type': ams_type,
                         'type': fil_type,
                         'brand': fil_sub_type,
                         'color': fil_color,
@@ -304,16 +375,21 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
 class PrinterDataAPIView(LoginRequiredMixin, View):
     """API endpoint for dynamic printer chart updates"""
 
-    def get(self, request):
+    def get(self, request, pk=None):
         start_date = request.GET.get("start_date")
         end_date = request.GET.get("end_date")
         start_time = request.GET.get("start_time", "00:00")
         end_time = request.GET.get("end_time", "23:59")
 
         try:
-            printer_device = Printer.objects.filter(is_active=True).first()
-            if not printer_device:
-                return JsonResponse({"error": "No printer device found"}, status=404)
+            if pk is not None:
+                printer_device = Printer.objects.filter(pk=pk, is_active=True).first()
+                if not printer_device:
+                    return JsonResponse({"error": "Printer not found"}, status=404)
+            else:
+                printer_device = Printer.objects.filter(is_active=True).first()
+                if not printer_device:
+                    return JsonResponse({"error": "No printer device found"}, status=404)
 
             tz = zoneinfo.ZoneInfo(app_settings.TIMEZONE)
 
