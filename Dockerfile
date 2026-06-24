@@ -22,19 +22,20 @@ RUN pip install --no-cache-dir bambu-lab-cloud-api --no-deps && \
         (d / 'INSTALLER').write_text('pip\n'); \
         (d / 'RECORD').write_text('')"
 
-# Install project and remaining dependencies (pip sees opencv-python already satisfied)
+# Install standalone dependencies first — cached unless pyproject.toml changes
 COPY pyproject.toml .
 RUN pip install --no-cache-dir ".[standalone,mcp]"
 
-# Copy application code
+# Copy full source and install the local package (no-deps: already installed above)
 COPY . .
+RUN pip install --no-cache-dir --no-deps .
 
 # Create data directory for SQLite
 RUN mkdir -p /app/data
 
-# Collect static files
+# Collect static files from the locally installed package
 ENV DJANGO_SETTINGS_MODULE=standalone.settings
-RUN python standalone/manage.py collectstatic --noinput 2>/dev/null || true
+RUN python standalone/manage.py collectstatic --noinput
 
 # Supervisor config to run both web and collector
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf

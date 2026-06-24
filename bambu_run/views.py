@@ -175,10 +175,22 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
             # Group trays by physical AMS unit for the panel-style dashboard layout —
             # one tinted panel per unit, full-width for multi-slot units (AMS/AMS 2 Pro),
             # compact for single-slot units (AMS HT) so several can flow side-by-side.
+            # Filaments with ams_unit_id=None (pre-multi-AMS rows) fall into a single
+            # unlabelled group so they still render rather than being silently dropped.
             units_meta = {
                 u.get('unit_id'): u for u in (latest_metric.ams_units or [])
             }
             ams_groups = []
+            ungrouped = [f for f in filaments_list if f.get('ams_unit_id') is None]
+            if ungrouped:
+                ams_groups.append({
+                    'unit_id': None,
+                    'ams_type': '',
+                    'label': 'AMS',
+                    'humidity': None,
+                    'temp': None,
+                    'filaments': ungrouped,
+                })
             for uid, label in sorted(seen_units.items()):
                 unit_meta = units_meta.get(str(uid), {})
                 ams_groups.append({
