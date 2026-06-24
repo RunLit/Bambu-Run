@@ -113,27 +113,12 @@
     border-color: currentColor;
 }
 
-/* Grouped AMS unit panels — wide (multi-slot) units stack one per row,
-   compact (single-slot, e.g. AMS HT) units flow side-by-side and wrap. */
-.ams-groups {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-}
-
+/* Grouped AMS unit panels — Bootstrap row/col handles sizing;
+   multi-slot units (AMS/AMS 2 Pro) are col-12, single-slot (AMS HT) are col-lg-3. */
 .ams-group {
     border-radius: 0.5rem;
     padding: 0.75rem;
     border: 1px solid var(--ams-group-border-color);
-}
-
-.ams-group--wide {
-    flex: 1 1 100%;
-}
-
-.ams-group--compact {
-    flex: 0 1 auto;
-    min-width: 220px;
 }
 
 .ams-badge-bg-ams {

@@ -164,37 +164,6 @@
     </div>
     {% endif %}
 
-    <!-- AMS Status Section -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5>AMS Status</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-4">
-                            <strong>Temperature:</strong>
-                            {% if stats.ams_temp %}
-                                {{ stats.ams_temp|floatformat:1 }}&deg;C
-                            {% else %}
-                                N/A
-                            {% endif %}
-                        </div>
-                        <div class="col-md-4">
-                            <strong>Humidity:</strong>
-                            {% if stats.ams_humidity %}
-                                {{ stats.ams_humidity }}%
-                            {% else %}
-                                N/A
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Filaments Section -->
     <div class="row mb-4">
         <div class="col-12">
@@ -212,9 +181,9 @@
                         {% endfor %}
                     </div>
                     {% endif %}
-                    <div class="ams-groups">
+                    <div class="row g-3 ams-groups">
                         {% for group in stats.ams_groups %}
-                        <div class="ams-group ams-badge-bg-{{ group.ams_type|slugify }} {% if group.filaments|length > 1 %}ams-group--wide{% else %}ams-group--compact{% endif %}" data-ams-unit-id="{{ group.unit_id }}">
+                        <div class="{% if group.filaments|length > 1 %}col-12{% else %}col-12 col-md-6 col-lg-3{% endif %} ams-group ams-badge-bg-{{ group.ams_type|slugify }}" data-ams-unit-id="{{ group.unit_id }}">
                             <div class="ams-group-header d-flex justify-content-between align-items-center mb-2">
                                 <strong class="small">{{ group.label }}</strong>
                                 {% if group.humidity is not None or group.temp is not None %}
