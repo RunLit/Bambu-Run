@@ -8,7 +8,8 @@ from django.utils import timezone
 AMS_INFO_TO_TYPE = {
     "1001": "AMS",
     "1003": "AMS 2 Pro",
-    "2104": "AMS HT",
+    "1104": "AMS HT",   # observed on production H2C (last 4 of info code 11001104)
+    "2104": "AMS HT",   # observed in dev capture (last 4 of info code 11002104)
 }
 
 AMS_TYPE_CHOICES = [

@@ -159,27 +159,30 @@ class PrinterDashboardView(LoginRequiredMixin, TemplateView):
             except Exception:
                 filaments_list = []
 
-            # Distinct AMS units represented in this snapshot, for the unit
-            # filter/badges in the template. Sort numeric unit ids first
-            # (AMS / AMS 2 Pro), HT (id 128 / bit 0x80 set) last.
+            # Build a lookup from unit_id → AMS unit metadata (humidity, temp, info code)
+            # first so we can enrich blank ams_type values derived from old snapshots.
+            units_meta = {
+                u.get('unit_id'): u for u in (latest_metric.ams_units or [])
+            }
+
+            # Distinct AMS units in this snapshot. ams_type stored on FilamentSnapshot
+            # may be blank for rows written before the multi-AMS deploy — fall back to
+            # re-deriving from the unit's info code so labels always show correctly.
+            from .models import ams_type_from_info as _ams_type_from_info
             seen_units = {}
             for f in filaments_list:
                 uid = f.get('ams_unit_id')
                 if uid is not None and uid not in seen_units:
-                    seen_units[uid] = f.get('ams_type') or ''
+                    label = f.get('ams_type') or ''
+                    if not label:
+                        unit_meta = units_meta.get(str(uid), {})
+                        label = _ams_type_from_info(unit_meta.get('info', ''))
+                    seen_units[uid] = label
             ams_units_list = [
                 {'ams_unit_id': uid, 'ams_type': label}
                 for uid, label in sorted(seen_units.items())
             ]
 
-            # Group trays by physical AMS unit for the panel-style dashboard layout —
-            # one tinted panel per unit, full-width for multi-slot units (AMS/AMS 2 Pro),
-            # compact for single-slot units (AMS HT) so several can flow side-by-side.
-            # Filaments with ams_unit_id=None (pre-multi-AMS rows) fall into a single
-            # unlabelled group so they still render rather than being silently dropped.
-            units_meta = {
-                u.get('unit_id'): u for u in (latest_metric.ams_units or [])
-            }
             ams_groups = []
             ungrouped = [f for f in filaments_list if f.get('ams_unit_id') is None]
             if ungrouped:

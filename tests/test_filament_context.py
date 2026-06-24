@@ -157,8 +157,8 @@ def test_dashboard_renders_wide_and_compact_panels(logged_in_client):
     )
 
     html = resp.content.decode()
-    assert "ams-group--wide" in html
-    assert "ams-group--compact" in html
+    assert "col-12 ams-group" in html        # wide group: col-12 only
+    assert "col-lg-3 ams-group" in html      # compact group: col-lg-3
     assert "AMS 2 Pro (Unit 0)" in html
     assert "AMS HT (Unit 128)" in html
 
