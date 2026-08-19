@@ -109,6 +109,12 @@ def test_normalize_consumed_sentinel_start_goes_unreliable():
     assert normalize_consumed(-1, 100, initial_weight_grams=1000) == (None, None, "unreliable")
 
 
+def test_normalize_consumed_sentinel_end_goes_unreliable():
+    # symmetric case: ending_percent == -1 (no RFID reading at job end)
+    # must not fabricate a plausible-looking consumption figure
+    assert normalize_consumed(74, -1, initial_weight_grams=1000) == (None, None, "unreliable")
+
+
 @pytest.mark.django_db
 def test_resolve_printer_by_id():
     p = Printer.objects.create(name="RNL-H2C", model="H2C", is_active=True)

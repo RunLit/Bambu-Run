@@ -108,7 +108,10 @@ def normalize_consumed(starting_percent, ending_percent, initial_weight_grams):
     fabricated zero (spec: 24/269 usage rows go negative; a -1 sentinel
     subtracted as a real value produces e.g. consumed=-101%).
     """
-    if starting_percent is None or starting_percent == -1 or ending_percent is None:
+    if (
+        starting_percent is None or starting_percent == -1
+        or ending_percent is None or ending_percent == -1
+    ):
         return None, None, "unreliable"
     consumed_percent = starting_percent - ending_percent
     if consumed_percent < 0:
