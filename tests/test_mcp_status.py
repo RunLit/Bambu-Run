@@ -182,3 +182,60 @@ def test_get_metrics_history_hard_ceiling_500_points():
 def test_get_metrics_history_no_matching_printer_returns_empty_shape():
     result = get_metrics_history(printer=None)
     assert result == {"printer": None, "timestamps": [], "series": {}}
+
+
+from bambu_run.models import Hotend
+from bambu_run.mcp.status import get_hardware_health
+
+
+@pytest.mark.django_db
+def test_get_hardware_health_reports_wifi_and_humidity_averages():
+    p = Printer.objects.create(name="RNL-H2C", model="H2C", is_active=True)
+    now = timezone.now()
+    PrinterMetrics.objects.create(device=p, timestamp=now, wifi_signal_dbm=-50, ams_humidity_raw=4)
+    PrinterMetrics.objects.create(device=p, timestamp=now - timedelta(hours=1), wifi_signal_dbm=-60, ams_humidity_raw=6)
+
+    result = get_hardware_health(printer=p.id, days=7)
+
+    assert result["wifi_signal_dbm"]["current"] == -50
+    assert result["wifi_signal_dbm"]["window_avg"] == -55.0
+    assert result["ams_humidity_raw_window_avg"] == 5.0
+
+
+@pytest.mark.django_db
+def test_get_hardware_health_excludes_wear_percent_field():
+    p = Printer.objects.create(name="RNL-H2C", model="H2C", is_active=True)
+    PrinterMetrics.objects.create(device=p, timestamp=timezone.now())
+    Hotend.objects.create(
+        printer=p, serial_number="SN1", raw_id=0, is_toolhead=True,
+        used_time_seconds=3600, wear_percent=100,
+    )
+
+    result = get_hardware_health(printer=p.id)
+
+    hotend = result["hotends"][0]
+    assert hotend["used_time_hours"] == 1.0
+    assert "wear_percent" not in hotend
+
+
+@pytest.mark.django_db
+def test_get_hardware_health_classifies_persistent_alert():
+    p = Printer.objects.create(name="RNL-H2C", model="H2C", is_active=True)
+    now = timezone.now()
+    for i in range(30):
+        PrinterMetrics.objects.create(
+            device=p, timestamp=now - timedelta(minutes=i),
+            hms=[{"attr": 83887616, "code": 131078}],
+        )
+    for i in range(30, 100):
+        PrinterMetrics.objects.create(device=p, timestamp=now - timedelta(minutes=i), hms=[])
+
+    result = get_hardware_health(printer=p.id, days=1)
+
+    assert result["alerts"][0]["kind"] == "persistent"
+    assert result["alerts"][0]["occurrences"] == 30
+
+
+@pytest.mark.django_db
+def test_get_hardware_health_no_printer_returns_empty_shape():
+    assert get_hardware_health(printer=None) == {"printer": None}

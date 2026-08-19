@@ -185,3 +185,61 @@ def get_metrics_history(
         "timestamps": [r.timestamp.isoformat() for r in rows],
         "series": series,
     }
+
+
+def get_hardware_health(printer: str | int | None = None, days: int = 7) -> dict:
+    """Maintenance-relevant observations for one printer: wifi, AMS humidity,
+    alert summary, hotend inventory, and collector coverage.
+
+    Returns observations only -- it does not render a verdict; the calling
+    agent decides what the numbers mean. wear_percent is deliberately absent
+    from each hotend entry: verified constant at 100.00 across every
+    hotend's entire history, so it carries no information.
+    """
+    now = timezone.now()
+    target = resolve_printer(printer).first()
+    if target is None:
+        return {"printer": None}
+
+    since = now - timedelta(days=days)
+    window = PrinterMetrics.objects.filter(device=target, timestamp__gte=since)
+    total = window.count()
+    latest = window.order_by("-timestamp").first()
+
+    wifi_avg = window.exclude(wifi_signal_dbm__isnull=True).aggregate(avg=Avg("wifi_signal_dbm"))["avg"]
+    humidity_avg = window.exclude(ams_humidity_raw__isnull=True).aggregate(avg=Avg("ams_humidity_raw"))["avg"]
+
+    counts = defaultdict(int)
+    for hms_list in window.exclude(hms=[]).values_list("hms", flat=True):
+        for entry in hms_list:
+            counts[(entry.get("attr"), entry.get("code"))] += 1
+
+    hotends = [
+        {
+            "id": h.id,
+            "serial_number": h.serial_number,
+            "position": "toolhead" if h.is_toolhead else (f"slot_{h.slot_number}" if h.slot_number else "rack"),
+            "used_time_hours": round(h.used_time_seconds / 3600, 1),
+            "last_filament_profile_id": h.last_filament_profile_id or None,
+        }
+        for h in Hotend.objects.filter(printer=target)
+    ]
+
+    expected_polls = int(days * 24 * 60 * 60 / 30)  # 30s measured collector cadence
+
+    return {
+        "printer": {"id": target.id, "name": target.name},
+        "generated_at": now.isoformat(),
+        "wifi_signal_dbm": {
+            "current": latest.wifi_signal_dbm if latest else None,
+            "window_avg": round(wifi_avg, 1) if wifi_avg is not None else None,
+        },
+        "ams_humidity_raw_window_avg": round(humidity_avg, 1) if humidity_avg is not None else None,
+        "alerts": classify_alerts(counts, total),
+        "hotends": hotends,
+        "collector": {
+            "polls_in_window": total,
+            "expected_polls": expected_polls,
+            "coverage_ratio": round(total / expected_polls, 2) if expected_polls else None,
+        },
+    }
