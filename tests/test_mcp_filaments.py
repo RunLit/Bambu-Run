@@ -2,7 +2,7 @@ import pytest
 from django.utils import timezone
 
 from bambu_run.models import Filament, Printer, PrintJob, FilamentUsage
-from bambu_run.mcp.filaments import list_filaments
+from bambu_run.mcp.filaments import list_filaments, get_filament
 
 
 @pytest.mark.django_db
@@ -97,3 +97,39 @@ def test_list_filaments_never_exposes_rfid_identifiers():
     entry_str = repr(result["filaments"][0])
     assert "SECRET-UUID" not in entry_str
     assert "SECRET-TAG" not in entry_str
+
+
+@pytest.mark.django_db
+def test_get_filament_returns_full_usage_history_with_data_quality():
+    p = Printer.objects.create(name="RNL-H2C", model="H2C", is_active=True)
+    f = Filament.objects.create(type="ABS", brand="Bambu Lab", color="Black", initial_weight_grams=1000)
+    job1 = PrintJob.objects.create(device=p, project_name="Bracket", start_time=timezone.now(), final_status="FINISH")
+    job2 = PrintJob.objects.create(device=p, project_name="Vase", start_time=timezone.now(), final_status="FINISH")
+    FilamentUsage.objects.create(print_job=job1, filament=f, tray_id=0, starting_percent=80, ending_percent=70)
+    FilamentUsage.objects.create(print_job=job2, filament=f, tray_id=0, starting_percent=-1, ending_percent=100)
+
+    result = get_filament(f.id)
+
+    assert len(result["usage_history"]) == 2
+    reliable = next(u for u in result["usage_history"] if u["job_name"] == "Bracket")
+    unreliable = next(u for u in result["usage_history"] if u["job_name"] == "Vase")
+    assert reliable["data_quality"] == "ok"
+    assert reliable["consumed_grams"] == 100
+    assert unreliable["data_quality"] == "unreliable"
+    assert unreliable["consumed_grams"] is None
+
+
+@pytest.mark.django_db
+def test_get_filament_never_exposes_purchase_price_or_cost():
+    f = Filament.objects.create(type="PLA", brand="Bambu Lab", color="White", purchase_price=25.50)
+
+    result = get_filament(f.id)
+
+    assert "purchase_price" not in result
+    assert "cost" not in result
+
+
+@pytest.mark.django_db
+def test_get_filament_unknown_id_raises():
+    with pytest.raises(Filament.DoesNotExist):
+        get_filament(999999)

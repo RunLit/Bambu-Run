@@ -80,3 +80,36 @@ def _spool_summary(f, include_history):
             for u in f.print_usages.select_related("print_job").order_by("-print_job__start_time")[:3]
         ]
     return entry
+
+
+def get_filament(filament_id: int) -> dict:
+    """One spool in full, plus its complete print-usage history.
+
+    Usage rows with corrupt consumption (negative, or derived from the -1
+    "unread" sentinel) are returned with consumed_grams null and
+    data_quality "unreliable" rather than dropped -- the print still
+    happened, and hiding it would misstate the spool's history. Raises
+    Filament.DoesNotExist if filament_id is unknown.
+    """
+    f = Filament.objects.get(id=filament_id)
+    summary = _spool_summary(f, include_history=False)
+
+    usages = []
+    for u in f.print_usages.select_related("print_job").order_by("-print_job__start_time"):
+        consumed_percent, consumed_grams, quality = normalize_consumed(
+            u.starting_percent, u.ending_percent, f.initial_weight_grams
+        )
+        usages.append({
+            "job_id": u.print_job_id,
+            "job_name": u.print_job.project_name,
+            "started_at": u.print_job.start_time.isoformat(),
+            "consumed_percent": consumed_percent,
+            "consumed_grams": consumed_grams,
+            "data_quality": quality,
+        })
+
+    return {
+        **summary,
+        "purchase_date": f.purchase_date.isoformat() if f.purchase_date else None,
+        "usage_history": usages,
+    }
