@@ -3,7 +3,7 @@ from datetime import timedelta
 from django.utils import timezone
 
 from bambu_run.models import Printer, PrintJob, BambuCloudTask, Filament, FilamentUsage
-from bambu_run.mcp.jobs import list_print_jobs, get_print_job
+from bambu_run.mcp.jobs import list_print_jobs, get_print_job, get_print_statistics
 
 
 @pytest.mark.django_db
@@ -106,3 +106,74 @@ def test_get_print_job_computes_estimate_delta_percent():
 def test_get_print_job_unknown_id_raises():
     with pytest.raises(PrintJob.DoesNotExist):
         get_print_job(999999)
+
+
+@pytest.mark.django_db
+def test_get_print_statistics_success_rate_and_status_counts():
+    p = Printer.objects.create(name="RNL-H2C", model="H2C", is_active=True)
+    now = timezone.now()
+    PrintJob.objects.create(device=p, project_name="A", start_time=now, final_status="FINISH")
+    PrintJob.objects.create(device=p, project_name="B", start_time=now, final_status="FAILED")
+
+    result = get_print_statistics(days=30)
+
+    assert result["total_jobs"] == 2
+    assert result["success_rate"] == 0.5
+    assert result["status_counts"]["FINISH"] == 1
+    assert result["status_counts"]["FAILED"] == 1
+
+
+@pytest.mark.django_db
+def test_get_print_statistics_material_mix_excludes_negative_consumption():
+    p = Printer.objects.create(name="RNL-H2C", model="H2C", is_active=True)
+    job = PrintJob.objects.create(device=p, project_name="A", start_time=timezone.now(), final_status="FINISH")
+    pla = Filament.objects.create(type="PLA", brand="Bambu Lab", color="Black", initial_weight_grams=1000)
+    abs_f = Filament.objects.create(type="ABS", brand="Bambu Lab", color="White", initial_weight_grams=1000)
+    FilamentUsage.objects.create(print_job=job, filament=pla, tray_id=0, starting_percent=74, ending_percent=68)  # 6% -> 60g, valid
+    FilamentUsage.objects.create(print_job=job, filament=abs_f, tray_id=1, starting_percent=51, ending_percent=52)  # jitter, excluded
+
+    result = get_print_statistics(days=30)
+
+    assert result["material_mix_grams"] == {"PLA": 60.0}
+    assert result["most_used_material"] == "PLA"
+
+
+@pytest.mark.django_db
+def test_get_print_statistics_estimate_accuracy_mean_and_median():
+    p = Printer.objects.create(name="RNL-H2C", model="H2C", is_active=True)
+    cloud1 = BambuCloudTask.objects.create(task_id=1, cost_time_seconds=100 * 60)
+    cloud2 = BambuCloudTask.objects.create(task_id=2, cost_time_seconds=100 * 60)
+    PrintJob.objects.create(
+        device=p, project_name="A", start_time=timezone.now(),
+        final_status="FINISH", cloud_task=cloud1, duration_minutes=110,
+    )
+    PrintJob.objects.create(
+        device=p, project_name="B", start_time=timezone.now(),
+        final_status="FINISH", cloud_task=cloud2, duration_minutes=130,
+    )
+
+    result = get_print_statistics(days=30)
+
+    assert result["estimate_accuracy"]["mean_ratio"] == 1.2
+    assert result["estimate_accuracy"]["median_ratio"] == 1.2
+
+
+@pytest.mark.django_db
+def test_get_print_statistics_cost_always_null_and_unavailable():
+    result = get_print_statistics(days=30)
+    assert result["cost_total"] is None
+    assert result["cost_available"] is False
+
+
+@pytest.mark.django_db
+def test_get_print_statistics_failures_lists_top_failing_projects():
+    p = Printer.objects.create(name="RNL-H2C", model="H2C", is_active=True)
+    now = timezone.now()
+    PrintJob.objects.create(device=p, project_name="Flaky", start_time=now, final_status="FAILED")
+    PrintJob.objects.create(device=p, project_name="Flaky", start_time=now, final_status="FAILED")
+    PrintJob.objects.create(device=p, project_name="Solid", start_time=now, final_status="FINISH")
+
+    result = get_print_statistics(days=30)
+
+    assert result["failures"]["count"] == 2
+    assert result["failures"]["top_failing_projects"][0] == {"name": "Flaky", "count": 2}

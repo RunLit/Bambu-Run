@@ -9,7 +9,7 @@ from django.db.models import Avg, Count, ExpressionWrapper, F, FloatField, Q, Su
 from django.utils import timezone
 
 from bambu_run.mcp.shapes import display_name, normalize_consumed, resolve_printer
-from bambu_run.models import BambuCloudTask, FilamentUsage, PrintJob
+from bambu_run.models import BambuCloudTask, FilamentUsage, Filament, PrintJob
 
 
 def list_print_jobs(
@@ -113,4 +113,96 @@ def get_print_job(job_id: int) -> dict:
         "filament_usages": usages,
         "cloud_design_title": cloud.design_title if cloud else None,
         "cover_url": cloud.cover_url if cloud and cloud.cover_url else None,
+    }
+
+
+def get_print_statistics(days: int = 30, printer: str | int | None = None) -> dict:
+    """Aggregate print analytics over a window: success rate, total time and
+    filament, estimate accuracy, failure patterns, and material mix.
+
+    cost_total is always null in this phase -- cost_available: false tells
+    the agent to explain the gap rather than report zero spend.
+    most_used_material answers "what did I print most" directly for the
+    requested window (days=7 for last week, days=30 for last month).
+    """
+    since = timezone.now() - timedelta(days=days)
+    qs = PrintJob.objects.filter(start_time__gte=since)
+    if printer is not None:
+        qs = qs.filter(device__in=resolve_printer(printer))
+
+    total_jobs = qs.count()
+    status_counts = {
+        (row["final_status"] or "running"): row["n"]
+        for row in qs.values("final_status").annotate(n=Count("id"))
+    }
+    finished = status_counts.get("FINISH", 0)
+    success_rate = round(finished / total_jobs, 3) if total_jobs else None
+
+    total_duration = qs.aggregate(s=Sum("duration_minutes"))["s"] or 0
+
+    cloud_qs = BambuCloudTask.objects.filter(print_jobs__in=qs).distinct()
+    total_grams = cloud_qs.aggregate(s=Sum("weight_grams"))["s"]
+    jobs_without_cloud = total_jobs - cloud_qs.count()
+
+    # Same exclusion rules as normalize_consumed (starting_percent must be a
+    # real reading, and consumption must be non-negative), expressed as a DB
+    # filter -- a Python helper can't run inside an aggregate expression.
+    valid_usage = (
+        Q(starting_percent__gt=F("ending_percent"))
+        & ~Q(starting_percent=-1)
+        & Q(filament__initial_weight_grams__isnull=False)
+    )
+    material_rows = (
+        FilamentUsage.objects.filter(print_job__in=qs)
+        .filter(valid_usage)
+        .annotate(
+            grams=ExpressionWrapper(
+                (F("starting_percent") - F("ending_percent")) * F("filament__initial_weight_grams") / 100.0,
+                output_field=FloatField(),
+            )
+        )
+        .values("filament__type")
+        .annotate(total_grams=Sum("grams"))
+        .order_by("-total_grams")
+    )
+    material_mix = {row["filament__type"]: round(row["total_grams"], 2) for row in material_rows if row["filament__type"]}
+    most_used_material = next(iter(material_mix), None)
+
+    failed = qs.filter(final_status="FAILED")
+    failure_names = list(failed.values("project_name").annotate(n=Count("id")).order_by("-n")[:5])
+
+    ratio_qs = qs.filter(
+        duration_minutes__isnull=False, cloud_task__cost_time_seconds__gt=0
+    ).annotate(
+        ratio=ExpressionWrapper(
+            F("duration_minutes") / (F("cloud_task__cost_time_seconds") / 60.0),
+            output_field=FloatField(),
+        )
+    )
+    mean_ratio = ratio_qs.aggregate(avg=Avg("ratio"))["avg"]
+    # median has no portable DB-level equivalent across backends; this list
+    # is already bounded by the same days/printer filters as everything else.
+    ratios = list(ratio_qs.values_list("ratio", flat=True))
+    median_ratio = statistics.median(ratios) if ratios else None
+
+    return {
+        "window_days": days,
+        "total_jobs": total_jobs,
+        "success_rate": success_rate,
+        "status_counts": status_counts,
+        "total_print_minutes": total_duration,
+        "total_filament_grams": float(total_grams) if total_grams is not None else None,
+        "jobs_without_cloud_data": jobs_without_cloud,
+        "estimate_accuracy": {
+            "mean_ratio": round(mean_ratio, 2) if mean_ratio is not None else None,
+            "median_ratio": round(median_ratio, 2) if median_ratio is not None else None,
+        },
+        "failures": {
+            "count": failed.count(),
+            "top_failing_projects": [{"name": f["project_name"], "count": f["n"]} for f in failure_names],
+        },
+        "material_mix_grams": material_mix,
+        "most_used_material": most_used_material,
+        "cost_total": None,
+        "cost_available": False,
     }
