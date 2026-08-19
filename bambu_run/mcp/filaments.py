@@ -41,7 +41,7 @@ def list_filaments(
     if min_remaining_percent is not None:
         qs = qs.exclude(remaining_percent=-1).filter(remaining_percent__gte=min_remaining_percent)
     if min_remaining_grams is not None:
-        qs = qs.exclude(remaining_weight_grams__isnull=True).filter(remaining_weight_grams__gte=min_remaining_grams)
+        qs = qs.exclude(remaining_percent=-1).exclude(remaining_weight_grams__isnull=True).filter(remaining_weight_grams__gte=min_remaining_grams)
 
     spools = [_spool_summary(f, include_history) for f in qs.order_by("-remaining_percent")[:limit]]
     return {"filaments": spools}

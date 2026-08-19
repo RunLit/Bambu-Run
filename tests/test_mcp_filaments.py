@@ -29,6 +29,26 @@ def test_list_filaments_min_remaining_grams_excludes_unread_sentinel():
 
 
 @pytest.mark.django_db
+def test_list_filaments_min_remaining_grams_excludes_unread_even_with_low_threshold():
+    # The existing test only checks min_remaining_grams=250, which happens to
+    # exclude a -10g sentinel-derived value anyway. This test uses a threshold
+    # low enough that a naive filter would let the sentinel spool through.
+    Filament.objects.create(
+        type="ABS", brand="Bambu Lab", color="Mint",
+        remaining_percent=-1, remaining_weight_grams=-10,
+    )
+    Filament.objects.create(
+        type="ABS", brand="Bambu Lab", color="Orange",
+        remaining_percent=68, remaining_weight_grams=680,
+    )
+
+    result = list_filaments(material="ABS", min_remaining_grams=-20)
+
+    assert len(result["filaments"]) == 1
+    assert result["filaments"][0]["color_name"] == "Orange"
+
+
+@pytest.mark.django_db
 def test_list_filaments_unread_sentinel_status_not_low():
     Filament.objects.create(type="ABS", brand="Bambu Lab", color="Mint", remaining_percent=-1)
 
