@@ -72,3 +72,45 @@ def _job_summary(job):
         "cost": None,
         "has_cover_image": bool(cloud and cloud.cover_url),
     }
+
+
+def get_print_job(job_id: int) -> dict:
+    """Full detail for one print job: the list_print_jobs fields plus
+    per-slot filament breakdown, estimate-vs-actual delta, and linked cloud
+    metadata. Raises PrintJob.DoesNotExist if job_id is unknown.
+    """
+    job = PrintJob.objects.select_related("cloud_task", "device").get(id=job_id)
+    summary = _job_summary(job)
+
+    delta_percent = None
+    if summary["estimated_duration_min"] and summary["duration_min"]:
+        delta_percent = round(
+            100 * (summary["duration_min"] - summary["estimated_duration_min"])
+            / summary["estimated_duration_min"],
+            1,
+        )
+
+    usages = []
+    for u in job.filament_usages.select_related("filament"):
+        consumed_percent, consumed_grams, quality = normalize_consumed(
+            u.starting_percent, u.ending_percent,
+            u.filament.initial_weight_grams if u.filament else None,
+        )
+        usages.append({
+            "tray_id": u.tray_id,
+            "ams_unit_id": u.ams_unit_id,
+            "filament_id": u.filament_id,
+            "consumed_percent": consumed_percent,
+            "consumed_grams": consumed_grams,
+            "data_quality": quality,
+            "is_primary": u.is_primary,
+        })
+
+    cloud = job.cloud_task
+    return {
+        **summary,
+        "estimate_delta_percent": delta_percent,
+        "filament_usages": usages,
+        "cloud_design_title": cloud.design_title if cloud else None,
+        "cover_url": cloud.cover_url if cloud and cloud.cover_url else None,
+    }

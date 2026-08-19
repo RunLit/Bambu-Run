@@ -2,8 +2,8 @@ import pytest
 from datetime import timedelta
 from django.utils import timezone
 
-from bambu_run.models import Printer, PrintJob, BambuCloudTask
-from bambu_run.mcp.jobs import list_print_jobs
+from bambu_run.models import Printer, PrintJob, BambuCloudTask, Filament, FilamentUsage
+from bambu_run.mcp.jobs import list_print_jobs, get_print_job
 
 
 @pytest.mark.django_db
@@ -69,3 +69,40 @@ def test_list_print_jobs_display_name_falls_back_to_project_name():
     result = list_print_jobs()
 
     assert result["jobs"][0]["display_name"] == "raw_project"
+
+
+@pytest.mark.django_db
+def test_get_print_job_marks_negative_consumption_unreliable():
+    p = Printer.objects.create(name="RNL-H2C", model="H2C", is_active=True)
+    job = PrintJob.objects.create(device=p, project_name="Bracket", start_time=timezone.now(), final_status="FINISH")
+    filament = Filament.objects.create(type="ABS", brand="Bambu Lab", color="Mint", initial_weight_grams=1000)
+    FilamentUsage.objects.create(
+        print_job=job, filament=filament, tray_id=0,
+        starting_percent=51, ending_percent=52,  # ordinary RFID jitter, spec finding
+    )
+
+    result = get_print_job(job.id)
+
+    usage = result["filament_usages"][0]
+    assert usage["consumed_grams"] is None
+    assert usage["data_quality"] == "unreliable"
+
+
+@pytest.mark.django_db
+def test_get_print_job_computes_estimate_delta_percent():
+    p = Printer.objects.create(name="RNL-H2C", model="H2C", is_active=True)
+    cloud = BambuCloudTask.objects.create(task_id=1, cost_time_seconds=205 * 60)
+    job = PrintJob.objects.create(
+        device=p, project_name="Bracket", start_time=timezone.now(),
+        final_status="FINISH", cloud_task=cloud, duration_minutes=237,
+    )
+
+    result = get_print_job(job.id)
+
+    assert result["estimate_delta_percent"] == round(100 * (237 - 205) / 205, 1)
+
+
+@pytest.mark.django_db
+def test_get_print_job_unknown_id_raises():
+    with pytest.raises(PrintJob.DoesNotExist):
+        get_print_job(999999)
