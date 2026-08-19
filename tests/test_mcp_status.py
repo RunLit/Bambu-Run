@@ -129,3 +129,56 @@ def test_get_printer_status_alerts_use_frequency_heuristic_not_hms_emptiness():
     result = get_printer_status(printer=p.id)
 
     assert result["printers"][0]["alerts"] == []
+
+
+from bambu_run.mcp.status import get_metrics_history
+
+
+@pytest.mark.django_db
+def test_get_metrics_history_returns_series_within_window():
+    p = Printer.objects.create(name="RNL-H2C", model="H2C", is_active=True)
+    now = timezone.now()
+    for i in range(3):
+        PrinterMetrics.objects.create(
+            device=p, timestamp=now - timedelta(hours=i),
+            nozzle_temp=200 + i, bed_temp=60, chamber_temp=35,
+            print_percent=50 + i, ams_humidity_raw=5, cooling_fan_speed=100,
+        )
+    PrinterMetrics.objects.create(device=p, timestamp=now - timedelta(hours=10), nozzle_temp=999)
+
+    result = get_metrics_history(printer=p.id, hours=6)
+
+    assert result["printer"]["id"] == p.id
+    assert len(result["timestamps"]) == 3
+    assert 999.0 not in result["series"]["nozzle_c"]
+
+
+@pytest.mark.django_db
+def test_get_metrics_history_filters_to_requested_metrics():
+    p = Printer.objects.create(name="RNL-H2C", model="H2C", is_active=True)
+    PrinterMetrics.objects.create(device=p, timestamp=timezone.now(), nozzle_temp=200, print_percent=10)
+
+    result = get_metrics_history(printer=p.id, metrics=["progress"])
+
+    assert "print_percent" in result["series"]
+    assert "nozzle_c" not in result["series"]
+
+
+@pytest.mark.django_db
+def test_get_metrics_history_hard_ceiling_500_points():
+    p = Printer.objects.create(name="RNL-H2C", model="H2C", is_active=True)
+    now = timezone.now()
+    PrinterMetrics.objects.bulk_create([
+        PrinterMetrics(device=p, timestamp=now - timedelta(minutes=i))
+        for i in range(600)
+    ])
+
+    result = get_metrics_history(printer=p.id, hours=24, max_points=10000)
+
+    assert len(result["timestamps"]) <= 500
+
+
+@pytest.mark.django_db
+def test_get_metrics_history_no_matching_printer_returns_empty_shape():
+    result = get_metrics_history(printer=None)
+    assert result == {"printer": None, "timestamps": [], "series": {}}

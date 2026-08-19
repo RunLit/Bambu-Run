@@ -137,3 +137,51 @@ def _alerts_for_printer(printer, now, window_hours=ALERT_WINDOW_HOURS):
         for entry in hms_list:
             counts[(entry.get("attr"), entry.get("code"))] += 1
     return classify_alerts(counts, total)
+
+
+def get_metrics_history(
+    printer: str | int | None = None,
+    hours: int = 6,
+    metrics: list[str] | None = None,
+    max_points: int = 300,
+) -> dict:
+    """Sampled time-series history for one printer: temps, humidity, progress, fans.
+
+    metrics selects which series to include: any of "temps", "humidity",
+    "progress", "fans" (omit for all four). Server-side sampled to at most
+    max_points (hard ceiling 500) evenly across the window -- do not expect
+    one point per collector poll on a long window. printer defaults to the
+    first active printer when omitted; pass an id or name explicitly if more
+    than one printer is registered.
+    """
+    from bambu_run.views import sample_metrics  # reuse: same thinning the dashboard already uses
+
+    max_points = min(max_points, 500)
+    target = resolve_printer(printer).first()
+    if target is None:
+        return {"printer": None, "timestamps": [], "series": {}}
+
+    since = timezone.now() - timedelta(hours=hours)
+    rows = list(
+        PrinterMetrics.objects.filter(device=target, timestamp__gte=since).order_by("timestamp")
+    )
+    rows = sample_metrics(rows, max_points=max_points)
+
+    wanted = set(metrics) if metrics else {"temps", "humidity", "progress", "fans"}
+    series = {}
+    if "temps" in wanted:
+        series["nozzle_c"] = [float(r.nozzle_temp) if r.nozzle_temp is not None else None for r in rows]
+        series["bed_c"] = [float(r.bed_temp) if r.bed_temp is not None else None for r in rows]
+        series["chamber_c"] = [float(r.chamber_temp) if r.chamber_temp is not None else None for r in rows]
+    if "humidity" in wanted:
+        series["ams_humidity_raw"] = [r.ams_humidity_raw for r in rows]
+    if "progress" in wanted:
+        series["print_percent"] = [r.print_percent for r in rows]
+    if "fans" in wanted:
+        series["cooling_fan_percent"] = [r.cooling_fan_speed for r in rows]
+
+    return {
+        "printer": {"id": target.id, "name": target.name},
+        "timestamps": [r.timestamp.isoformat() for r in rows],
+        "series": series,
+    }
