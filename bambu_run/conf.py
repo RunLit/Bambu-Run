@@ -64,14 +64,6 @@ class _Settings:
     def MCP_PORT(self):
         return get_setting("BAMBU_RUN_MCP_PORT", 8808)
 
-    @property
-    def MCP_AUTH_BACKEND(self):
-        return get_setting("BAMBU_RUN_MCP_AUTH_BACKEND", None)
-
-    @property
-    def MCP_HIDE_SENSITIVE(self):
-        return get_setting("BAMBU_RUN_MCP_HIDE_SENSITIVE", False)
-
     # Cloud sync settings
     @property
     def CLOUD_SYNC_ENABLED(self):

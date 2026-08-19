@@ -15,6 +15,7 @@ def test_list_filaments_filters_material_sub_type_color():
 
     assert len(result["filaments"]) == 1
     assert result["filaments"][0]["sub_type"] == "PLA Matte"
+    assert "generated_at" in result
 
 
 @pytest.mark.django_db
@@ -117,6 +118,7 @@ def test_get_filament_returns_full_usage_history_with_data_quality():
     assert reliable["consumed_grams"] == 100
     assert unreliable["data_quality"] == "unreliable"
     assert unreliable["consumed_grams"] is None
+    assert "generated_at" in result
 
 
 @pytest.mark.django_db

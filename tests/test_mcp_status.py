@@ -98,6 +98,44 @@ def test_get_printer_status_ams_slot_unread_sentinel():
 
 
 @pytest.mark.django_db
+def test_get_printer_status_ams_units_have_independent_humidity():
+    p = Printer.objects.create(name="RNL-H2C", model="H2C", is_active=True)
+    PrinterMetrics.objects.create(
+        device=p, timestamp=timezone.now(), gcode_state="RUNNING",
+        ams_humidity_raw=4,  # unit-0-only flat column, must NOT be used for unit 1
+        ams_units=[
+            {"unit_id": 0, "ams_type": "AMS 2 Pro", "humidity_raw": 4, "temp": 28.0},
+            {"unit_id": 1, "ams_type": "AMS", "humidity_raw": 7, "temp": 24.0},
+        ],
+        filaments=[
+            {"ams_unit_id": 0, "tray_id": "0", "type": "ABS", "remain_percent": 50},
+            {"ams_unit_id": 1, "tray_id": "0", "type": "PLA", "remain_percent": 60},
+        ],
+    )
+
+    result = get_printer_status(printer=p.id)
+
+    units_by_id = {u["unit_id"]: u for u in result["printers"][0]["ams_units"]}
+    assert units_by_id[0]["humidity_raw"] == 4
+    assert units_by_id[1]["humidity_raw"] == 7
+    assert units_by_id[0]["temp_c"] == 28.0
+    assert units_by_id[1]["temp_c"] == 24.0
+
+
+@pytest.mark.django_db
+def test_get_printer_status_tolerates_malformed_tray_id():
+    p = Printer.objects.create(name="RNL-H2C", model="H2C", is_active=True)
+    PrinterMetrics.objects.create(
+        device=p, timestamp=timezone.now(), gcode_state="RUNNING",
+        filaments=[{"ams_unit_id": 0, "tray_id": None, "type": "ABS", "remain_percent": 50}],
+    )
+
+    result = get_printer_status(printer=p.id)  # must not raise
+
+    assert result["printers"][0]["ams_units"][0]["slots"][0]["slot"] == -1
+
+
+@pytest.mark.django_db
 def test_get_printer_status_never_exposes_serial_or_ip():
     p = Printer.objects.create(
         name="RNL-H2C", model="H2C", is_active=True,
@@ -151,6 +189,7 @@ def test_get_metrics_history_returns_series_within_window():
     assert result["printer"]["id"] == p.id
     assert len(result["timestamps"]) == 3
     assert 999.0 not in result["series"]["nozzle_c"]
+    assert "generated_at" in result
 
 
 @pytest.mark.django_db
@@ -181,7 +220,10 @@ def test_get_metrics_history_hard_ceiling_500_points():
 @pytest.mark.django_db
 def test_get_metrics_history_no_matching_printer_returns_empty_shape():
     result = get_metrics_history(printer=None)
-    assert result == {"printer": None, "timestamps": [], "series": {}}
+    assert result["printer"] is None
+    assert result["timestamps"] == []
+    assert result["series"] == {}
+    assert "generated_at" in result
 
 
 from bambu_run.models import Hotend

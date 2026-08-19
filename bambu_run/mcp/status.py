@@ -89,9 +89,25 @@ def _temperatures(metric):
     }
 
 
+def _safe_tray_id(value, default=-1):
+    """Coerce a tray_id from the filaments JSON to int, defaulting on anything
+    that isn't a clean int (missing, None, or malformed) rather than crashing
+    the whole tool from one bad row."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _ams_units(printer, latest_metric):
     """Build ams_units from the latest metric's filaments, with remain_percent
-    smoothed against the printer's 5 most recent metric rows."""
+    smoothed against the printer's 5 most recent metric rows.
+
+    Per-unit humidity/temp come from PrinterMetrics.ams_units (a JSONField with
+    one entry per physical AMS unit) -- NOT from PrinterMetrics.ams_humidity_raw/
+    .ams_temp, which the collector only ever populates from unit 0's reading and
+    would otherwise stamp one unit's humidity onto every unit.
+    """
     recent_filament_lists = list(
         PrinterMetrics.objects.filter(device=printer)
         .order_by("-timestamp")
@@ -100,19 +116,24 @@ def _ams_units(printer, latest_metric):
     readings = defaultdict(list)
     for filaments in recent_filament_lists:
         for f in filaments or []:
-            key = (f.get("ams_unit_id"), int(f.get("tray_id", -1)))
+            key = (f.get("ams_unit_id"), _safe_tray_id(f.get("tray_id")))
             readings[key].append(f.get("remain_percent"))
+
+    unit_readings = {
+        u.get("unit_id"): u for u in (latest_metric.ams_units or [])
+    }
 
     units = {}
     for f in latest_metric.filaments or []:
         unit_id = f.get("ams_unit_id")
-        tray_id = int(f.get("tray_id", -1))
+        tray_id = _safe_tray_id(f.get("tray_id"))
         value, status = smoothed_remaining_percent(readings[(unit_id, tray_id)])
+        unit_reading = unit_readings.get(unit_id, {})
         unit = units.setdefault(unit_id, {
             "unit_id": unit_id,
             "type": f.get("ams_type", ""),
-            "humidity_raw": latest_metric.ams_humidity_raw,
-            "temp_c": float(latest_metric.ams_temp) if latest_metric.ams_temp is not None else None,
+            "humidity_raw": unit_reading.get("humidity_raw"),
+            "temp_c": float(unit_reading["temp"]) if unit_reading.get("temp") is not None else None,
             "slots": [],
         })
         color = f.get("color")
@@ -156,12 +177,13 @@ def get_metrics_history(
     """
     from bambu_run.views import sample_metrics  # reuse: same thinning the dashboard already uses
 
+    now = timezone.now()
     max_points = min(max_points, 500)
     target = resolve_printer(printer).first()
     if target is None:
-        return {"printer": None, "timestamps": [], "series": {}}
+        return {"generated_at": now.isoformat(), "printer": None, "timestamps": [], "series": {}}
 
-    since = timezone.now() - timedelta(hours=hours)
+    since = now - timedelta(hours=hours)
     rows = list(
         PrinterMetrics.objects.filter(device=target, timestamp__gte=since).order_by("timestamp")
     )
@@ -181,6 +203,7 @@ def get_metrics_history(
         series["cooling_fan_percent"] = [r.cooling_fan_speed for r in rows]
 
     return {
+        "generated_at": now.isoformat(),
         "printer": {"id": target.id, "name": target.name},
         "timestamps": [r.timestamp.isoformat() for r in rows],
         "series": series,

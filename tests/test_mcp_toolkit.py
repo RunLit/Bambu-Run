@@ -56,6 +56,7 @@ async def test_read_printer_only_caller_cannot_see_or_call_filament_tool(db):
         visible = await client.list_tools()
         visible_names = {t.name for t in visible.tools}
         assert "list_filaments" not in visible_names
+        assert "list_print_jobs" not in visible_names
         assert "get_printer_status" in visible_names
 
         with pytest.raises(MCPError):

@@ -1,6 +1,8 @@
 """list_filaments, get_filament -- the read_filament capability tools."""
 from __future__ import annotations
 
+from django.utils import timezone
+
 from bambu_run.mcp.shapes import normalize_consumed, remaining_status
 from bambu_run.models import Filament
 
@@ -44,7 +46,7 @@ def list_filaments(
         qs = qs.exclude(remaining_percent=-1).exclude(remaining_weight_grams__isnull=True).filter(remaining_weight_grams__gte=min_remaining_grams)
 
     spools = [_spool_summary(f, include_history) for f in qs.order_by("-remaining_percent")[:limit]]
-    return {"filaments": spools}
+    return {"generated_at": timezone.now().isoformat(), "filaments": spools}
 
 
 def _spool_summary(f, include_history):
@@ -110,6 +112,7 @@ def get_filament(filament_id: int) -> dict:
 
     return {
         **summary,
+        "generated_at": timezone.now().isoformat(),
         "purchase_date": f.purchase_date.isoformat() if f.purchase_date else None,
         "usage_history": usages,
     }

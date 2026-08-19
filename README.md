@@ -63,6 +63,7 @@ It runs quietly in the background 24/7, capturing every print, filament change, 
   - [Troubleshooting (Native)](#troubleshooting-native)
 - [Docker Setup](#docker-setup)
 - [Batch Importing Filament Colors and Filament Types](#batch-importing-filament-colors-and-filament-types)
+- [MCP Server (AI Agent Access)](#mcp-server-ai-agent-access)
 
 ---
 
@@ -296,3 +297,37 @@ Processing: PLA Basic.txt  →  type='PLA'  sub_type='PLA Basic'
 - **Created** — new color entries added to the database
 - **Skipped (duplicate)** — already existed, not changed
 - **Skipped (no type)** — only shown if `--no-auto-create-filament-type` is used and the filament type isn't in the database yet
+
+## MCP Server (AI Agent Access)
+
+Bambu-Run exposes printer status, print history, and filament inventory as
+read-only [MCP](https://modelcontextprotocol.io/) tools, so an AI agent (e.g.
+Claude Desktop, Claude Code) can query your printer directly.
+
+Install the extra:
+
+```bash
+pip install 'bambu-run[mcp]'
+```
+
+**stdio** (for a local agent on the same machine — e.g. Claude Desktop):
+
+```bash
+python manage.py bambu_mcp_server --transport stdio
+```
+
+**HTTP** (for a remote agent, or multiple callers over the network):
+
+```bash
+export BAMBU_RUN_MCP_API_KEY=your-secret-key
+python manage.py bambu_mcp_server --transport http --host 0.0.0.0 --port 8808
+```
+
+`BAMBU_RUN_MCP_API_KEY` is **required** for HTTP — the server refuses to start
+without it, since an unauthenticated network MCP endpoint would expose your
+printer and filament data to anyone who can reach the port. stdio needs no key
+(the OS process boundary is the trust boundary there).
+
+If serving behind a reverse proxy on a real domain, pass
+`--allowed-host your.domain.com` (repeatable) — otherwise the SDK's
+DNS-rebinding guard rejects requests with a real `Host` header.

@@ -31,10 +31,11 @@ def list_print_jobs(
     returned by one call; narrow days or increase limit deliberately.
     """
     limit = min(limit, 100)
+    now = timezone.now()
     qs = PrintJob.objects.select_related("cloud_task", "device")
     if printer is not None:
         qs = qs.filter(device__in=resolve_printer(printer))
-    since = timezone.now() - timedelta(days=days)
+    since = now - timedelta(days=days)
     qs = qs.filter(start_time__gte=since)
     if status == "running":
         qs = qs.filter(final_status__isnull=True)
@@ -44,7 +45,7 @@ def list_print_jobs(
         qs = qs.filter(project_name__icontains=name_contains)
 
     jobs = list(qs.order_by("-start_time")[:limit])
-    return {"jobs": [_job_summary(j) for j in jobs]}
+    return {"generated_at": now.isoformat(), "jobs": [_job_summary(j) for j in jobs]}
 
 
 def _job_summary(job):
@@ -79,6 +80,7 @@ def get_print_job(job_id: int) -> dict:
     per-slot filament breakdown, estimate-vs-actual delta, and linked cloud
     metadata. Raises PrintJob.DoesNotExist if job_id is unknown.
     """
+    now = timezone.now()
     job = PrintJob.objects.select_related("cloud_task", "device").get(id=job_id)
     summary = _job_summary(job)
 
@@ -109,6 +111,7 @@ def get_print_job(job_id: int) -> dict:
     cloud = job.cloud_task
     return {
         **summary,
+        "generated_at": now.isoformat(),
         "estimate_delta_percent": delta_percent,
         "filament_usages": usages,
         "cloud_design_title": cloud.design_title if cloud else None,
@@ -125,7 +128,8 @@ def get_print_statistics(days: int = 30, printer: str | int | None = None) -> di
     most_used_material answers "what did I print most" directly for the
     requested window (days=7 for last week, days=30 for last month).
     """
-    since = timezone.now() - timedelta(days=days)
+    now = timezone.now()
+    since = now - timedelta(days=days)
     qs = PrintJob.objects.filter(start_time__gte=since)
     if printer is not None:
         qs = qs.filter(device__in=resolve_printer(printer))
@@ -142,7 +146,7 @@ def get_print_statistics(days: int = 30, printer: str | int | None = None) -> di
 
     cloud_qs = BambuCloudTask.objects.filter(print_jobs__in=qs).distinct()
     total_grams = cloud_qs.aggregate(s=Sum("weight_grams"))["s"]
-    jobs_without_cloud = total_jobs - cloud_qs.count()
+    jobs_without_cloud = qs.filter(cloud_task__isnull=True).count()
 
     # Same exclusion rules as normalize_consumed (starting_percent must be a
     # real reading, and consumption must be non-negative), expressed as a DB
@@ -150,6 +154,7 @@ def get_print_statistics(days: int = 30, printer: str | int | None = None) -> di
     valid_usage = (
         Q(starting_percent__gt=F("ending_percent"))
         & ~Q(starting_percent=-1)
+        & ~Q(ending_percent=-1)
         & Q(filament__initial_weight_grams__isnull=False)
     )
     material_rows = (
@@ -186,6 +191,7 @@ def get_print_statistics(days: int = 30, printer: str | int | None = None) -> di
     median_ratio = statistics.median(ratios) if ratios else None
 
     return {
+        "generated_at": now.isoformat(),
         "window_days": days,
         "total_jobs": total_jobs,
         "success_rate": success_rate,

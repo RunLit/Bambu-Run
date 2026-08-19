@@ -16,6 +16,7 @@ def test_list_print_jobs_orders_most_recent_first():
     result = list_print_jobs()
 
     assert [j["id"] for j in result["jobs"]] == [newer.id, older.id]
+    assert "generated_at" in result
 
 
 @pytest.mark.django_db
@@ -86,6 +87,7 @@ def test_get_print_job_marks_negative_consumption_unreliable():
     usage = result["filament_usages"][0]
     assert usage["consumed_grams"] is None
     assert usage["data_quality"] == "unreliable"
+    assert "generated_at" in result
 
 
 @pytest.mark.django_db
@@ -121,6 +123,21 @@ def test_get_print_statistics_success_rate_and_status_counts():
     assert result["success_rate"] == 0.5
     assert result["status_counts"]["FINISH"] == 1
     assert result["status_counts"]["FAILED"] == 1
+    assert "generated_at" in result
+
+
+@pytest.mark.django_db
+def test_get_print_statistics_excludes_ending_sentinel_from_material_mix():
+    p = Printer.objects.create(name="RNL-H2C", model="H2C", is_active=True)
+    job = PrintJob.objects.create(device=p, project_name="A", start_time=timezone.now(), final_status="FINISH")
+    pla = Filament.objects.create(type="PLA", brand="Bambu Lab", color="Black", initial_weight_grams=1000)
+    # ending_percent=-1 (no RFID read at job end) must not be counted as 610g of consumption
+    FilamentUsage.objects.create(print_job=job, filament=pla, tray_id=0, starting_percent=60, ending_percent=-1)
+
+    result = get_print_statistics(days=30)
+
+    assert result["material_mix_grams"] == {}
+    assert result["most_used_material"] is None
 
 
 @pytest.mark.django_db
