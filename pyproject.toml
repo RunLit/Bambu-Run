@@ -41,12 +41,14 @@ standalone = [
     "whitenoise",
 ]
 mcp = [
-    "mcp[cli]>=1.0",
+    "mcp-gate @ git+https://github.com/RunLit/mcp-gate.git@v0.1.0",
+    "uvicorn",
 ]
 dev = [
     "ruff",
     "pytest",
     "pytest-django",
+    "anyio",
 ]
 
 [project.urls]
