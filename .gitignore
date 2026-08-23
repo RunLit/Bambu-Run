@@ -1,2 +1,27 @@
+# Secrets — setup.sh writes Bambu credentials + Django secret key here
+.env
+!.env.example
+
+# Local-only agent notes
+CLAUDE.local.md
+.claude/
+
+# Native setup artifacts
+.venv/
+data/
+db.sqlite3
+staticfiles/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
 
 .worktrees/
