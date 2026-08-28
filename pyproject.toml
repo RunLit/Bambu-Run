@@ -40,6 +40,9 @@ standalone = [
     "python-dotenv",
     "whitenoise",
 ]
+postgres = [
+    "psycopg2-binary",
+]
 mcp = [
     "mcp-gate @ git+https://github.com/RunLit/mcp-gate.git@v0.1.0",
     "uvicorn",
