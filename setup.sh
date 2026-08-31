@@ -1,7 +1,20 @@
 #!/usr/bin/env bash
 # Bambu-Run Native Setup — single entry point for Raspberry Pi (or any Linux)
-# Usage: git clone ... && cd Bambu-Run && bash setup.sh
+# Usage: git clone ... && cd Bambu-Run && bash setup.sh [-v|--verbose]
+#   -v, --verbose   show full pip install output instead of --quiet
 set -euo pipefail
+
+VERBOSE=0
+for arg in "$@"; do
+    case "$arg" in
+        -v|--verbose) VERBOSE=1 ;;
+    esac
+done
+
+PIP_QUIET_FLAG="--quiet"
+if [ "$VERBOSE" -eq 1 ]; then
+    PIP_QUIET_FLAG=""
+fi
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 VENV_DIR="$REPO_DIR/.venv"
@@ -98,8 +111,8 @@ else:
     print('  opencv stub already exists')
 "
 
-"$VENV_DIR/bin/pip" install --quiet --upgrade pip
-"$VENV_DIR/bin/pip" install --quiet ".[standalone]"
+"$VENV_DIR/bin/pip" install $PIP_QUIET_FLAG --upgrade pip
+"$VENV_DIR/bin/pip" install $PIP_QUIET_FLAG ".[standalone]"
 
 # ── 3. Interactive .env ───────────────────────────────────────────────────────
 
@@ -208,7 +221,7 @@ MCP_ENABLED=false
 read -rp "Enable MCP server for AI agent access (Claude Desktop, Claude Code, etc.)? [y/N] " ENABLE_MCP
 if [[ "$ENABLE_MCP" =~ ^[Yy] ]]; then
     green "Installing MCP dependencies..."
-    "$VENV_DIR/bin/pip" install --quiet ".[mcp]"
+    "$VENV_DIR/bin/pip" install $PIP_QUIET_FLAG ".[mcp]"
 
     sed "s|{{REPO_DIR}}|$REPO_DIR|g; s|{{VENV_DIR}}|$VENV_DIR|g" \
         "$REPO_DIR/native/bambu-run-mcp.service" > "$SERVICE_DIR/bambu-run-mcp.service"
