@@ -304,7 +304,15 @@ Bambu-Run exposes printer status, print history, and filament inventory as
 read-only [MCP](https://modelcontextprotocol.io/) tools, so an AI agent (e.g.
 Claude Desktop, Claude Code) can query your printer directly.
 
-Install the extra:
+**Native install (`setup.sh`):** if you declined MCP during setup (or ran
+`setup.sh` before MCP support existed), enable it any time with:
+
+```bash
+./native/bambu-run.sh enable-mcp    # install deps, create + start the systemd service
+./native/bambu-run.sh disable-mcp   # stop and remove it
+```
+
+**Manual / library install:** install the extra:
 
 ```bash
 pip install 'bambu-run[mcp]'

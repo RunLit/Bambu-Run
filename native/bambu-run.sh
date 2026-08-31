@@ -37,6 +37,38 @@ case "${1:-help}" in
         fi
         journalctl --user $JOURNAL_UNITS -f --no-hostname
         ;;
+    enable-mcp)
+        if [ -f "$SERVICE_DIR/bambu-run-mcp.service" ]; then
+            echo "MCP server already enabled."
+        else
+            echo "Installing MCP dependencies..."
+            "$VENV_DIR/bin/pip" install --quiet ".[mcp]"
+
+            sed "s|{{REPO_DIR}}|$REPO_DIR|g; s|{{VENV_DIR}}|$VENV_DIR|g" \
+                "$REPO_DIR/native/bambu-run-mcp.service" > "$SERVICE_DIR/bambu-run-mcp.service"
+
+            systemctl --user daemon-reload
+            systemctl --user enable bambu-run-mcp.service
+            systemctl --user start bambu-run-mcp.service
+
+            PI_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+            echo "MCP server enabled on port 8808."
+            echo
+            echo "  Claude Desktop config:"
+            echo "    {\"mcpServers\":{\"bambu-run\":{\"url\":\"http://${PI_IP:-localhost}:8808/sse\"}}}"
+        fi
+        ;;
+    disable-mcp)
+        if [ ! -f "$SERVICE_DIR/bambu-run-mcp.service" ]; then
+            echo "MCP server is not enabled."
+        else
+            systemctl --user stop bambu-run-mcp.service 2>/dev/null || true
+            systemctl --user disable bambu-run-mcp.service 2>/dev/null || true
+            rm -f "$SERVICE_DIR/bambu-run-mcp.service"
+            systemctl --user daemon-reload
+            echo "MCP server disabled."
+        fi
+        ;;
     update)
         echo "Pulling latest code..."
         cd "$REPO_DIR" && git pull
@@ -60,13 +92,15 @@ case "${1:-help}" in
         echo "Update complete."
         ;;
     help|*)
-        echo "Usage: $0 {start|stop|restart|status|logs|update}"
+        echo "Usage: $0 {start|stop|restart|status|logs|update|enable-mcp|disable-mcp}"
         echo
-        echo "  start    Start web + collector services"
-        echo "  stop     Stop web + collector services"
-        echo "  restart  Restart web + collector services"
-        echo "  status   Show service status"
-        echo "  logs     Tail live logs (Ctrl+C to stop)"
-        echo "  update   Pull latest code, install deps, migrate, restart"
+        echo "  start        Start web + collector services"
+        echo "  stop         Stop web + collector services"
+        echo "  restart      Restart web + collector services"
+        echo "  status       Show service status"
+        echo "  logs         Tail live logs (Ctrl+C to stop)"
+        echo "  update       Pull latest code, install deps, migrate, restart"
+        echo "  enable-mcp   Install and start the MCP server for AI agent access"
+        echo "  disable-mcp  Stop and remove the MCP server service"
         ;;
 esac
