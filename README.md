@@ -153,6 +153,46 @@ cd Bambu-Run
 bash setup.sh
 ```
 
+### Pointing at an External Postgres Database (Read-Only)
+
+If you already have printer data in a Postgres database (e.g. shared with
+another Django project using the same `infrastructure_*` tables) and want this
+install to act as a read-only viewer instead of collecting its own data:
+
+```bash
+cd ~/Bambu-Run
+
+# 1. Stop and disable the collector — it's the only thing that writes to the
+#    database (PrinterMetrics, FilamentSnapshot, PrintJob). A read-only DB
+#    user will make it crash-loop, so turn it off.
+systemctl --user stop bambu-run-collector.service
+systemctl --user disable bambu-run-collector.service
+
+# 2. Install the Postgres driver
+.venv/bin/pip install ".[postgres]"
+
+# 3. Edit .env — point at Postgres with a read-only user, and switch sessions
+#    to signed cookies so login doesn't need to write to django_session
+cat >> .env <<'EOF'
+DB_ENGINE=postgresql
+DB_NAME=your_db_name
+DB_USER=your_readonly_user
+DB_PASSWORD=your_readonly_password
+DB_HOST=your_db_host
+DB_PORT=5432
+SESSION_ENGINE=signed_cookies
+EOF
+
+# 4. Restart the web service (do NOT run `manage.py migrate` — the schema
+#    already exists in that database, and a read-only user can't apply
+#    migrations anyway)
+systemctl --user restart bambu-run-web.service
+```
+
+You'll need a login that already exists in that database's `auth_user`
+table — this install can't create one itself without write access. If MCP is
+enabled, it becomes read-only too, since its tools only ever `SELECT`.
+
 ---
 
 ## Docker Setup

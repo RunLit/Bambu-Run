@@ -87,6 +87,15 @@ else:
         }
     }
 
+# Session storage — DB-backed by default. Set SESSION_ENGINE=signed_cookies when
+# pointing DB_ENGINE at a database whose user has read-only access, since the
+# default engine writes a row to django_session on every login.
+SESSION_ENGINE = (
+    "django.contrib.sessions.backends.signed_cookies"
+    if os.environ.get("SESSION_ENGINE") == "signed_cookies"
+    else "django.contrib.sessions.backends.db"
+)
+
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
