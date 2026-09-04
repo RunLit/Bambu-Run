@@ -5,6 +5,7 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VENV_DIR="$REPO_DIR/.venv"
+ENV_FILE="$REPO_DIR/.env"
 MANAGE="$VENV_DIR/bin/python $REPO_DIR/standalone/manage.py"
 SERVICES="bambu-run-web.service bambu-run-collector.service"
 
@@ -44,6 +45,19 @@ case "${1:-help}" in
             echo "Installing MCP dependencies..."
             "$VENV_DIR/bin/pip" install --quiet ".[mcp]"
 
+            # Resolution order: a real process/systemd env var always wins and is
+            # never written to .env; otherwise reuse whatever's already in .env;
+            # otherwise generate one (same pattern setup.sh uses for DJANGO_SECRET_KEY).
+            if [ -n "${BAMBU_RUN_MCP_API_KEY:-}" ]; then
+                echo "Using BAMBU_RUN_MCP_API_KEY from the environment (not written to .env)."
+            elif grep -q '^BAMBU_RUN_MCP_API_KEY=' "$ENV_FILE" 2>/dev/null; then
+                echo "BAMBU_RUN_MCP_API_KEY already in .env, reusing it."
+            else
+                MCP_API_KEY=$("$VENV_DIR/bin/python" -c "import secrets; print(secrets.token_urlsafe(32))")
+                echo "BAMBU_RUN_MCP_API_KEY=$MCP_API_KEY" >> "$ENV_FILE"
+                echo "Generated BAMBU_RUN_MCP_API_KEY and saved it to .env."
+            fi
+
             sed "s|{{REPO_DIR}}|$REPO_DIR|g; s|{{VENV_DIR}}|$VENV_DIR|g" \
                 "$REPO_DIR/native/bambu-run-mcp.service" > "$SERVICE_DIR/bambu-run-mcp.service"
 
@@ -52,10 +66,11 @@ case "${1:-help}" in
             systemctl --user start bambu-run-mcp.service
 
             PI_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+            MCP_KEY_FOR_DISPLAY="${BAMBU_RUN_MCP_API_KEY:-$(grep '^BAMBU_RUN_MCP_API_KEY=' "$ENV_FILE" 2>/dev/null | cut -d= -f2-)}"
             echo "MCP server enabled on port 8808."
             echo
             echo "  Claude Desktop config:"
-            echo "    {\"mcpServers\":{\"bambu-run\":{\"url\":\"http://${PI_IP:-localhost}:8808/sse\"}}}"
+            echo "    {\"mcpServers\":{\"bambu-run\":{\"url\":\"http://${PI_IP:-localhost}:8808/mcp\",\"headers\":{\"Authorization\":\"Bearer ${MCP_KEY_FOR_DISPLAY}\"}}}}"
         fi
         ;;
     disable-mcp)

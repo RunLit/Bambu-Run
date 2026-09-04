@@ -218,19 +218,38 @@ systemctl --user enable bambu-run-web.service bambu-run-collector.service
 
 echo
 MCP_ENABLED=false
-read -rp "Enable MCP server for AI agent access (Claude Desktop, Claude Code, etc.)? [y/N] " ENABLE_MCP
-if [[ "$ENABLE_MCP" =~ ^[Yy] ]]; then
-    green "Installing MCP dependencies..."
-    "$VENV_DIR/bin/pip" install $PIP_QUIET_FLAG ".[mcp]"
-
-    sed "s|{{REPO_DIR}}|$REPO_DIR|g; s|{{VENV_DIR}}|$VENV_DIR|g" \
-        "$REPO_DIR/native/bambu-run-mcp.service" > "$SERVICE_DIR/bambu-run-mcp.service"
-
-    systemctl --user daemon-reload
-    systemctl --user enable bambu-run-mcp.service
-    systemctl --user start bambu-run-mcp.service
+if [ -f "$SERVICE_DIR/bambu-run-mcp.service" ]; then
+    yellow "MCP server already enabled, skipping (use ./native/bambu-run.sh disable-mcp first to reconfigure)."
     MCP_ENABLED=true
-    green "MCP server enabled on port 8808."
+else
+    read -rp "Enable MCP server for AI agent access (Claude Desktop, Claude Code, etc.)? [y/N] " ENABLE_MCP
+    if [[ "$ENABLE_MCP" =~ ^[Yy] ]]; then
+        green "Installing MCP dependencies..."
+        "$VENV_DIR/bin/pip" install $PIP_QUIET_FLAG ".[mcp]"
+
+        # Resolution order: a real process/systemd env var always wins and is
+        # never written to .env (lets deployments override without touching
+        # the file); otherwise reuse whatever's already in .env; otherwise
+        # generate one, same pattern as DJANGO_SECRET_KEY above.
+        if [ -n "${BAMBU_RUN_MCP_API_KEY:-}" ]; then
+            yellow "Using BAMBU_RUN_MCP_API_KEY from the environment (not written to .env)."
+        elif grep -q '^BAMBU_RUN_MCP_API_KEY=' "$ENV_FILE" 2>/dev/null; then
+            yellow "BAMBU_RUN_MCP_API_KEY already in .env, reusing it."
+        else
+            MCP_API_KEY=$("$VENV_DIR/bin/python" -c "import secrets; print(secrets.token_urlsafe(32))")
+            echo "BAMBU_RUN_MCP_API_KEY=$MCP_API_KEY" >> "$ENV_FILE"
+            green "Generated BAMBU_RUN_MCP_API_KEY and saved it to .env."
+        fi
+
+        sed "s|{{REPO_DIR}}|$REPO_DIR|g; s|{{VENV_DIR}}|$VENV_DIR|g" \
+            "$REPO_DIR/native/bambu-run-mcp.service" > "$SERVICE_DIR/bambu-run-mcp.service"
+
+        systemctl --user daemon-reload
+        systemctl --user enable bambu-run-mcp.service
+        systemctl --user start bambu-run-mcp.service
+        MCP_ENABLED=true
+        green "MCP server enabled on port 8808."
+    fi
 fi
 
 # Enable linger so services survive SSH logout
@@ -288,15 +307,16 @@ green "============================================"
 echo
 echo "  Dashboard:  $DASHBOARD_URL"
 if [ "$MCP_ENABLED" = true ]; then
-    echo "  MCP Server: http://${PI_IP:-localhost}:8808/sse"
+    echo "  MCP Server: http://${PI_IP:-localhost}:8808/mcp"
 fi
 echo "  Status:     systemctl --user status bambu-run-web bambu-run-collector"
 echo "  Logs:       journalctl --user -u bambu-run-web -u bambu-run-collector -f"
 echo "  Helper:     ./native/bambu-run.sh {start|stop|restart|status|logs|update}"
 echo
 if [ "$MCP_ENABLED" = true ]; then
+    MCP_KEY_FOR_DISPLAY="${BAMBU_RUN_MCP_API_KEY:-$(grep '^BAMBU_RUN_MCP_API_KEY=' "$ENV_FILE" 2>/dev/null | cut -d= -f2-)}"
     echo "  Claude Desktop config:"
-    echo "    {\"mcpServers\":{\"bambu-run\":{\"url\":\"http://${PI_IP:-localhost}:8808/sse\"}}}"
+    echo "    {\"mcpServers\":{\"bambu-run\":{\"url\":\"http://${PI_IP:-localhost}:8808/mcp\",\"headers\":{\"Authorization\":\"Bearer ${MCP_KEY_FOR_DISPLAY}\"}}}}"
     echo
 fi
 echo "  Services auto-start on boot. Safe to close SSH."
